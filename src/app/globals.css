@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Surface — warm off-white */
+    --background: 50 33% 98%;
+    --foreground: 40 11% 11%;
+    --surface: 0 0% 100%;
+    --border: 40 14% 89%;
+    --muted: 40 8% 94%;
+    --muted-foreground: 40 6% 36%;
+
+    /* Brand: Siraj green */
+    --primary: 102 47% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Brand: Omar bronze */
+    --secondary: 30 47% 53%;
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 102 47% 95%;
+    --accent-foreground: 102 47% 25%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 40 11% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 11% 11%;
+
+    /* Semantic */
+    --success: 102 53% 42%;
+    --warning: 35 79% 56%;
+    --danger: 2 60% 58%;
+
+    /* Bubbles */
+    --bubble-user: 102 53% 92%;
+    --bubble-ai: 0 0% 100%;
+    --bubble-system: 40 14% 94%;
+
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html,
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "kern", "liga";
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply min-h-dvh;
+  }
+}
+
+@layer components {
+  /* Mobile-first shell — content is constrained to a phone-like column */
+  .app-shell {
+    @apply mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-background;
+  }
+  .app-main {
+    @apply flex flex-1 flex-col overflow-y-auto;
+  }
+  .reassure-text {
+    @apply text-[12px] leading-relaxed text-muted-foreground;
+  }
+}
