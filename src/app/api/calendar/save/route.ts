@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/google/session";
 import { insertEvent } from "@/lib/google/calendar";
+import { getUserByEmail } from "@/lib/supabase/users";
+import { auditLog } from "@/lib/supabase/audit";
+import { persistPlan } from "@/lib/supabase/plans";
+import type { Plan } from "@/lib/types";
 
 const SaveSchema = z.object({
   items: z.array(
@@ -13,6 +17,8 @@ const SaveSchema = z.object({
       reason: z.string().optional(),
     })
   ),
+  plan: z.unknown().optional(),
+  inputText: z.string().optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -34,7 +40,6 @@ export async function POST(req: Request) {
 
   const session = await getSession();
   if (!session) {
-    // Demo / not-connected: simulate success.
     return NextResponse.json({
       connected: false,
       saved: parsed.data.items.map((it) => ({
@@ -74,9 +79,36 @@ export async function POST(req: Request) {
     }
   }
 
+  // Best-effort Supabase persistence + audit.
+  let planRef: { plan_id: string; item_count: number } | null = null;
+  try {
+    const user = await getUserByEmail(session.email);
+    if (user) {
+      if (parsed.data.plan) {
+        planRef = await persistPlan({
+          userId: user.id,
+          plan: parsed.data.plan as Plan,
+          inputText: parsed.data.inputText,
+        });
+      }
+      await auditLog({
+        userId: user.id,
+        action: failed.length > 0 ? "calendar_save_partial" : "calendar_save",
+        metadata: {
+          saved_count: saved.length,
+          failed_count: failed.length,
+          plan_id: planRef?.plan_id,
+        },
+      });
+    }
+  } catch {
+    // Silent; we already saved to Calendar successfully.
+  }
+
   return NextResponse.json({
     connected: true,
     saved,
     failed,
+    plan_ref: planRef,
   });
 }

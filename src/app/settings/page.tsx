@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Bell,
   Calendar,
+  Download,
   Globe,
   LogOut,
   RotateCcw,
@@ -20,6 +21,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { usePlanStore } from "@/lib/store/plan-store";
 import { DEMO_PLAN } from "@/lib/mock/demo-plan";
 import { useGoogleSession } from "@/lib/hooks/use-google-session";
+import { useInstallPrompt } from "@/lib/hooks/use-install-prompt";
 
 interface RowProps {
   icon: React.ReactNode;
@@ -68,6 +70,19 @@ export default function SettingsPage() {
   const setPlan = usePlanStore((s) => s.setPlan);
   const reset = usePlanStore((s) => s.reset);
   const session = useGoogleSession();
+  const install = useInstallPrompt();
+
+  async function tryInstall() {
+    const outcome = await install.prompt();
+    if (outcome === "accepted") {
+      toast({ title: "تم تثبيت التطبيق", variant: "success" });
+    } else if (outcome === "unavailable") {
+      toast({
+        title: "التثبيت غير متاح حالياً",
+        description: "افتح التطبيق على Chrome أو Edge من جوال Android.",
+      });
+    }
+  }
 
   function loadDemo() {
     setPlan(DEMO_PLAN);
@@ -137,6 +152,19 @@ export default function SettingsPage() {
         </Card>
 
         <Card className="p-2">
+          <Row
+            icon={<Download className="h-4 w-4" />}
+            title={install.installed ? "التطبيق مثبّت" : "ثبّت التطبيق"}
+            desc={
+              install.installed
+                ? "يفتح من شاشتك الرئيسية بدون متصفح"
+                : install.available
+                  ? "أضِف رتّبها للشاشة الرئيسية"
+                  : "افتح من Chrome على Android لإظهار خيار التثبيت"
+            }
+            onClick={install.available ? tryInstall : undefined}
+          />
+          <Separator />
           <Row
             icon={<Sparkles className="h-4 w-4" />}
             title="حمّل خطة تجريبية"

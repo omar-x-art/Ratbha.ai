@@ -24,6 +24,7 @@ export default function PlanReviewPage() {
   const removeItem = usePlanStore((s) => s.removeItem);
   const postponeItem = usePlanStore((s) => s.postponeItem);
   const pinItem = usePlanStore((s) => s.pinItem);
+  const inputText = usePlanStore((s) => s.inputText);
 
   // Hydrate the store with mock data the first time the user lands here directly.
   React.useEffect(() => {
@@ -49,7 +50,7 @@ export default function PlanReviewPage() {
       await fetch("/api/calendar/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, plan, inputText }),
       });
       toast({
         title: "تم حفظ خطتك بنجاح",

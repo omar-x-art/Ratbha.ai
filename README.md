@@ -10,7 +10,7 @@
 - **vaul** for the bottom-sheet
 - **IBM Plex Sans Arabic** (via `next/font`) — Arabic-first
 - **Vitest** for unit tests on the date resolver and scheduling engine
-- **Supabase Postgres** (schema only in this MVP — see `src/lib/supabase/schema.sql`)
+- **Supabase Postgres** (migrations in `supabase/migrations/`)
 - **Google OAuth + Google Calendar API** *(stubbed routes; integration in Phase 5)*
 - **Gemini API** *(stubbed; live integration in Phase 5)*
 - **PWA** via `manifest.webmanifest`

@@ -20,6 +20,7 @@ export default function PlanPreviewPage() {
   const { toast } = useToast();
   const router = useRouter();
   const storedPlan = usePlanStore((s) => s.plan);
+  const inputText = usePlanStore((s) => s.inputText);
   const plan = storedPlan ?? MOCK_PLAN;
 
   const totalToday =
@@ -34,7 +35,7 @@ export default function PlanPreviewPage() {
       await fetch("/api/calendar/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, plan, inputText }),
       });
       toast({
         title: "تم حفظ خطتك بنجاح",

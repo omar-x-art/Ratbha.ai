@@ -6,6 +6,8 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
 } from "@/lib/google/oauth";
+import { upsertGoogleUser } from "@/lib/supabase/users";
+import { auditLog } from "@/lib/supabase/audit";
 
 const STATE_COOKIE = "rattabha-oauth-state";
 
@@ -35,6 +37,23 @@ export async function GET(req: Request) {
     tokens = await exchangeCodeForTokens(code);
   } catch {
     return errorRedirect("token_exchange_failed");
+  }
+
+  // Best-effort sync to Supabase. Failures here must NOT block login.
+  try {
+    const user = await upsertGoogleUser({
+      email: tokens.email,
+      name: tokens.name,
+    });
+    if (user) {
+      await auditLog({
+        userId: user.id,
+        action: "google_login",
+        metadata: { email: tokens.email },
+      });
+    }
+  } catch {
+    // Swallow — Supabase is optional in Phase 5.
   }
 
   const cookieValue = await encodeSessionCookie(tokens);
