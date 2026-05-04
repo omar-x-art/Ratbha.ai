@@ -70,6 +70,46 @@ describe("scheduleTasks", () => {
     expect(out.scheduled[0].start).toBeGreaterThanOrEqual(ms(2026, 5, 4, 10, 45));
   });
 
+  it("places a high-energy task in the morning even when afternoon fits", () => {
+    const start = ms(2026, 5, 4, 0);
+    const end = ms(2026, 5, 5, 0);
+    const out = scheduleTasks(
+      [
+        {
+          id: "deep",
+          title: "العرض",
+          duration_minutes: 60,
+          energy: "high",
+        },
+      ],
+      [],
+      start,
+      end
+    );
+    const startHour = new Date(out.scheduled[0].start).getHours();
+    expect(startHour).toBeLessThan(12);
+  });
+
+  it("places a low-energy task in the evening when free", () => {
+    const start = ms(2026, 5, 4, 0);
+    const end = ms(2026, 5, 5, 0);
+    const out = scheduleTasks(
+      [
+        {
+          id: "errand",
+          title: "ترتيب",
+          duration_minutes: 30,
+          energy: "low",
+        },
+      ],
+      [],
+      start,
+      end
+    );
+    const startHour = new Date(out.scheduled[0].start).getHours();
+    expect(startHour).toBeGreaterThanOrEqual(17);
+  });
+
   it("returns unscheduled when no slot is large enough", () => {
     const start = ms(2026, 5, 4, 0);
     const end = ms(2026, 5, 5, 0);

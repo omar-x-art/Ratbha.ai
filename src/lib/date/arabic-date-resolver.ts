@@ -79,5 +79,34 @@ export function resolveArabicDate(input: string, now: Date = new Date()): Resolv
   if (/(لما\s+أفضى|لما\s+افضى|في\s+أقرب\s+فراغ)/.test(txt)) {
     return { date: null, confidence: 0.4, reason: "flexible" };
   }
+  // "بعد ساعة" / "بعد ساعتين" / "بعد ٣ ساعات"
+  const inHours = txt.match(/بعد\s+(?:(ساعة|ساعتين)|(\d+)\s*ساعات?)/);
+  if (inHours) {
+    const h = inHours[1]
+      ? inHours[1] === "ساعتين"
+        ? 2
+        : 1
+      : parseInt(inHours[2] ?? "0", 10);
+    if (h > 0 && h <= 12) {
+      const d = new Date(now);
+      d.setHours(d.getHours() + h);
+      return { date: d, confidence: 0.95, reason: `in_${h}_hours` };
+    }
+  }
+  // "نهاية الأسبوع"
+  if (/نهاية\s+(الأسبوع|الاسبوع)/.test(txt)) {
+    const d = nextWeekday(today, 5); // Friday
+    return { date: d, confidence: 0.7, reason: "weekend" };
+  }
+  // "آخر الشهر" — last day of current month
+  if (/(آخر|اخر)\s+(الشهر|شهر)/.test(txt)) {
+    const d = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { date: d, confidence: 0.7, reason: "end_of_month" };
+  }
+  // "أول الشهر القادم"
+  if (/(أول|اول)\s+(الشهر|شهر)\s+(القادم|الجاي|المقبل)/.test(txt)) {
+    const d = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    return { date: d, confidence: 0.7, reason: "next_month_start" };
+  }
   return { date: null, confidence: 0 };
 }

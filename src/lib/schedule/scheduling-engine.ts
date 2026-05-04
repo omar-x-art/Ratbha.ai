@@ -103,32 +103,98 @@ export function scheduleTasks(
 
   for (const t of queue) {
     const need = t.duration_minutes * 60_000;
-    const i = slots.findIndex((s) => s.end - s.start >= need);
-    if (i === -1) {
+    const pick = pickPlacement(slots, t, need);
+    if (!pick) {
       unscheduled.push(t);
       continue;
     }
-    const slot = slots[i];
-    const start = slot.start;
+    const { slotIndex, start } = pick;
+    const slot = slots[slotIndex];
     const end = start + need;
     scheduled.push({
       id: t.id,
       start,
       end,
       title: t.title,
-      reason:
-        t.energy === "high"
-          ? "اخترنا الفترة الصباحية لأنها مهمة عالية الطاقة"
-          : "وضعناها في أول فراغ مناسب",
+      reason: reasonFor(t, start),
     });
     const remaining: FreeSlot[] = [];
+    if (start - DEFAULT_BUFFER_MINUTES * 60_000 > slot.start) {
+      remaining.push({
+        start: slot.start,
+        end: start - DEFAULT_BUFFER_MINUTES * 60_000,
+      });
+    }
     if (end + DEFAULT_BUFFER_MINUTES * 60_000 < slot.end) {
       remaining.push({
         start: end + DEFAULT_BUFFER_MINUTES * 60_000,
         end: slot.end,
       });
     }
-    slots.splice(i, 1, ...remaining);
+    slots.splice(slotIndex, 1, ...remaining);
   }
   return { scheduled, unscheduled };
+}
+
+function hourOf(ts: number): number {
+  return new Date(ts).getHours();
+}
+
+function dayHourFromSlot(slot: FreeSlot, hour: number): number {
+  const d = new Date(slot.start);
+  d.setHours(hour, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * Picks the best placement for a task given its energy:
+ *  - high energy → first slot whose first portion falls before noon
+ *  - low energy → first slot whose tail extends past 17:00 (placed at 17:00)
+ *  - otherwise → first-fit at slot.start
+ *
+ * Falls back to first-fit when nothing in the preferred range fits.
+ */
+function pickPlacement(
+  slots: FreeSlot[],
+  task: TaskRequest,
+  need: number
+): { slotIndex: number; start: number } | null {
+  if (task.energy === "high") {
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (hourOf(s.start) < 12 && s.end - s.start >= need) {
+        return { slotIndex: i, start: s.start };
+      }
+    }
+  }
+  if (task.energy === "low") {
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      const eveningStart = Math.max(s.start, dayHourFromSlot(s, 17));
+      if (eveningStart + need <= s.end) {
+        return { slotIndex: i, start: eveningStart };
+      }
+    }
+  }
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    if (s.end - s.start >= need) {
+      return { slotIndex: i, start: s.start };
+    }
+  }
+  return null;
+}
+
+function reasonFor(task: TaskRequest, start: number): string {
+  const h = hourOf(start);
+  if (task.energy === "high" && h < 12) {
+    return "اخترنا الصباح لأنها مهمة عالية الطاقة.";
+  }
+  if (task.energy === "low" && h >= 17) {
+    return "وضعناها في المساء لأنها مهمة خفيفة.";
+  }
+  if (task.priority === "urgent") {
+    return "أولوية عاجلة، حجزنا أقرب فراغ.";
+  }
+  return "وضعناها في أول فراغ مناسب.";
 }
