@@ -12,12 +12,25 @@ import { TaskItem } from "@/components/plan/TaskItem";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
 import { MOCK_PLAN } from "@/lib/mock/plans";
-import type { DayBucket, PlanItem } from "@/lib/types";
+import { usePlanStore } from "@/lib/store/plan-store";
+import type { PlanItem } from "@/lib/types";
 
 export default function PlanReviewPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [buckets, setBuckets] = React.useState<DayBucket[]>(MOCK_PLAN.buckets);
+  const storedPlan = usePlanStore((s) => s.plan);
+  const setPlan = usePlanStore((s) => s.setPlan);
+  const updateItem = usePlanStore((s) => s.updateItem);
+  const removeItem = usePlanStore((s) => s.removeItem);
+  const postponeItem = usePlanStore((s) => s.postponeItem);
+  const pinItem = usePlanStore((s) => s.pinItem);
+
+  // Hydrate the store with mock data the first time the user lands here directly.
+  React.useEffect(() => {
+    if (!storedPlan) setPlan(MOCK_PLAN);
+  }, [storedPlan, setPlan]);
+
+  const plan = storedPlan ?? MOCK_PLAN;
   const [editing, setEditing] = React.useState<PlanItem | null>(null);
   const [open, setOpen] = React.useState(false);
 
@@ -26,67 +39,38 @@ export default function PlanReviewPage() {
     setOpen(true);
   }
 
-  function applyToBuckets(updater: (items: PlanItem[]) => PlanItem[]) {
-    setBuckets((prev) =>
-      prev.map((b) => ({
-        ...b,
-        items: updater(b.items),
-      }))
-    );
-  }
-
   function onSaveItem(next: PlanItem) {
-    applyToBuckets((items) =>
-      items.map((it) => (it.id === next.id ? next : it))
-    );
+    updateItem(next.id, next);
   }
 
-  function onDelete(id: string) {
-    applyToBuckets((items) => items.filter((it) => it.id !== id));
-    setOpen(false);
-  }
-
-  function onPostpone(id: string) {
-    applyToBuckets((items) =>
-      items.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              start_time: new Date(
-                new Date(it.start_time).getTime() + 24 * 60 * 60 * 1000
-              ).toISOString(),
-              end_time: new Date(
-                new Date(it.end_time).getTime() + 24 * 60 * 60 * 1000
-              ).toISOString(),
-              reason: "أجّلتها للغد",
-            }
-          : it
-      )
-    );
-    setOpen(false);
-  }
-
-  function onPin(id: string) {
-    applyToBuckets((items) =>
-      items.map((it) => (it.id === id ? { ...it, is_locked: true } : it))
-    );
-    setOpen(false);
-  }
-
-  function saveToCalendar() {
-    toast({
-      title: "تم حفظ خطتك بنجاح",
-      description: "أضفنا الأحداث إلى Google Calendar (تجريبي).",
-      variant: "success",
-    });
-    setTimeout(() => router.push("/today"), 700);
+  async function saveToCalendar() {
+    const items = plan.buckets.flatMap((b) => b.items);
+    try {
+      await fetch("/api/calendar/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      toast({
+        title: "تم حفظ خطتك بنجاح",
+        description: "أضفنا الأحداث إلى Google Calendar (تجريبي).",
+        variant: "success",
+      });
+      setTimeout(() => router.push("/today"), 700);
+    } catch {
+      toast({
+        title: "تعذّر الحفظ الآن",
+        description: "أعد المحاولة بعد قليل.",
+        variant: "danger",
+      });
+    }
   }
 
   return (
     <AppShellMobile>
       <TopBar title="راجع وعدّل" showBack />
       <div className="flex flex-col gap-4 px-4 pb-32 pt-4">
-        {buckets.map((bucket) => (
+        {plan.buckets.map((bucket) => (
           <DaySection key={bucket.date} label={bucket.arabicLabel}>
             {bucket.items.map((item) => (
               <TaskItem key={item.id} item={item} onEdit={openEdit} />
@@ -116,9 +100,18 @@ export default function PlanReviewPage() {
         onOpenChange={setOpen}
         item={editing}
         onSave={onSaveItem}
-        onDelete={onDelete}
-        onPostpone={onPostpone}
-        onPin={onPin}
+        onDelete={(id) => {
+          removeItem(id);
+          setOpen(false);
+        }}
+        onPostpone={(id) => {
+          postponeItem(id);
+          setOpen(false);
+        }}
+        onPin={(id) => {
+          pinItem(id);
+          setOpen(false);
+        }}
       />
     </AppShellMobile>
   );
