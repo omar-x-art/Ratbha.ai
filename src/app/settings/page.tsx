@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import { usePlanStore } from "@/lib/store/plan-store";
 import { DEMO_PLAN } from "@/lib/mock/demo-plan";
+import { useGoogleSession } from "@/lib/hooks/use-google-session";
 
 interface RowProps {
   icon: React.ReactNode;
@@ -66,6 +67,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const setPlan = usePlanStore((s) => s.setPlan);
   const reset = usePlanStore((s) => s.reset);
+  const session = useGoogleSession();
 
   function loadDemo() {
     setPlan(DEMO_PLAN);
@@ -80,17 +82,37 @@ export default function SettingsPage() {
     toast({ title: "أُفرغت الخطة الحالية" });
   }
 
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/connect-calendar";
+    } catch {
+      toast({ title: "خطأ في الخروج", variant: "danger" });
+    }
+  }
+
   return (
     <AppShellMobile>
       <TopBar title="الإعدادات" showBack />
       <div className="flex flex-col gap-3 px-4 py-4">
         <Card className="p-2">
-          <Row icon={<User className="h-4 w-4" />} title="الحساب" desc="ربط Google" />
+          <Row
+            icon={<User className="h-4 w-4" />}
+            title={session?.email ?? "الحساب"}
+            desc={session?.connected ? session.name ?? "متصل بـ Google" : "غير متصل"}
+          />
           <Separator />
           <Row
             icon={<Calendar className="h-4 w-4" />}
             title="التقويم"
-            desc="Google Calendar"
+            desc={
+              session?.connected ? "Google Calendar متصل" : "اضغط لربط التقويم"
+            }
+            onClick={() =>
+              (window.location.href = session?.connected
+                ? "/settings"
+                : "/connect-calendar")
+            }
           />
           <Separator />
           <Row
@@ -134,6 +156,7 @@ export default function SettingsPage() {
           <Row
             icon={<LogOut className="h-4 w-4" />}
             title="تسجيل الخروج"
+            onClick={logout}
           />
           <Separator />
           <Row

@@ -12,6 +12,7 @@ import { TypingDots } from "@/components/chat/TypingDots";
 import { WELCOME_MESSAGES, SUGGESTION_CHIPS } from "@/lib/mock/messages";
 import { usePlanStore } from "@/lib/store/plan-store";
 import { buildPlanFromExtraction } from "@/lib/pipeline/build-plan";
+import { useGoogleSession } from "@/lib/hooks/use-google-session";
 import type { TaskExtraction } from "@/lib/gemini/schema";
 import type { ChatMessage } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export default function ChatHomePage() {
   const setInputText = usePlanStore((s) => s.setInputText);
   const [messages, setMessages] = React.useState<ChatMessage[]>(WELCOME_MESSAGES);
   const [thinking, setThinking] = React.useState(false);
+  const session = useGoogleSession();
 
   async function send(text: string) {
     setMessages((prev) => [
@@ -87,9 +89,19 @@ export default function ChatHomePage() {
     void send(chip.label);
   }
 
+  const connectionPill = session?.connected ? (
+    <span
+      className="me-1 inline-flex items-center gap-1 rounded-chip bg-primary-50 px-2 py-1 text-[11px] text-primary-700"
+      title={session.email}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-primary-600" />
+      متصل
+    </span>
+  ) : null;
+
   return (
     <AppShellMobile withComposerSpace>
-      <TopBar title="رتّبها" showSettings />
+      <TopBar title="رتّبها" showSettings rightSlot={connectionPill} />
       <ChatThread>
         {messages.map((m) => (
           <ChatBubble

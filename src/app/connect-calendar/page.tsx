@@ -19,16 +19,22 @@ export default function ConnectCalendarPage() {
   const setPlan = usePlanStore((s) => s.setPlan);
   const [status, setStatus] = React.useState<Status>("idle");
 
-  function connect() {
-    setStatus("connecting");
-    // No real OAuth yet — fail gracefully so the user understands the state.
-    setTimeout(() => {
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("error");
+    if (err) {
       setStatus("error");
       toast({
-        title: "ربط Google Calendar غير مفعّل بعد",
-        description: "نحتاج بياناتك السرية لتفعيله. جرّب «الوضع التجريبي» الآن.",
+        title: "فشل ربط Google Calendar",
+        description: decodeURIComponent(err).slice(0, 120),
+        variant: "danger",
       });
-    }, 900);
+    }
+  }, [toast]);
+
+  function connect() {
+    setStatus("connecting");
+    window.location.href = "/api/auth/google/start";
   }
 
   function tryDemo() {
@@ -75,8 +81,7 @@ export default function ConnectCalendarPage() {
 
             {status === "error" && (
               <p className="text-[12px] text-danger">
-                الربط غير مفعّل بعد. سيُربط حالما توفّر مالك التطبيق بيانات
-                OAuth.
+                لم نستطع إكمال الربط. حاول مرة أخرى.
               </p>
             )}
           </div>
