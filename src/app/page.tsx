@@ -10,43 +10,81 @@ import { SuggestionChips, type Chip } from "@/components/chat/SuggestionChips";
 import { MessageComposer } from "@/components/chat/MessageComposer";
 import { TypingDots } from "@/components/chat/TypingDots";
 import { WELCOME_MESSAGES, SUGGESTION_CHIPS } from "@/lib/mock/messages";
+import { usePlanStore } from "@/lib/store/plan-store";
+import { buildPlanFromExtraction } from "@/lib/pipeline/build-plan";
+import type { TaskExtraction } from "@/lib/gemini/schema";
 import type { ChatMessage } from "@/lib/types";
+
+interface BusyEvent {
+  start: string;
+  end: string;
+  isMeeting?: boolean;
+}
 
 export default function ChatHomePage() {
   const router = useRouter();
+  const setPlan = usePlanStore((s) => s.setPlan);
+  const setInputText = usePlanStore((s) => s.setInputText);
   const [messages, setMessages] = React.useState<ChatMessage[]>(WELCOME_MESSAGES);
   const [thinking, setThinking] = React.useState(false);
 
-  function go() {
-    // Mock "AI proposes plan" → navigate to plan preview
-    setTimeout(() => {
-      router.push("/plan/preview");
-    }, 900);
-  }
-
-  function send(text: string) {
+  async function send(text: string) {
     setMessages((prev) => [
       ...prev,
       { id: `u-${Date.now()}`, from: "user", text },
     ]);
+    setInputText(text);
     setThinking(true);
-    setTimeout(() => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `a-${Date.now()}`,
+        from: "ai",
+        character: "siraj",
+        text: "لحظة... أنظّم لك خطة وأعرضها قبل أي حفظ.",
+      },
+    ]);
+
+    try {
+      const [extractionRes, eventsRes] = await Promise.all([
+        fetch("/api/ai/parse-tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, locale: "ar" }),
+        }).then((r) => r.json() as Promise<TaskExtraction>),
+        fetch("/api/calendar/events").then(
+          (r) => r.json() as Promise<{ events: BusyEvent[] }>
+        ),
+      ]);
+
+      const busy = (eventsRes.events ?? []).map((e) => ({
+        start: new Date(e.start).getTime(),
+        end: new Date(e.end).getTime(),
+        isMeeting: e.isMeeting,
+      }));
+
+      const plan = buildPlanFromExtraction(extractionRes, {
+        busy,
+        text,
+      });
+      setPlan(plan);
+      router.push("/plan/preview");
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
-          id: `a-${Date.now()}`,
+          id: `a-err-${Date.now()}`,
           from: "ai",
           character: "siraj",
-          text: "لحظة... أنظّم لك خطة وأعرضها قبل أي حفظ.",
+          text: "صار خطأ بسيط أثناء بناء الخطة. جرّب تكتب الجملة مرة ثانية.",
         },
       ]);
       setThinking(false);
-      go();
-    }, 700);
+    }
   }
 
   function pickChip(chip: Chip) {
-    send(chip.label);
+    void send(chip.label);
   }
 
   return (
@@ -74,7 +112,7 @@ export default function ChatHomePage() {
         <SuggestionChips chips={SUGGESTION_CHIPS} onPick={pickChip} />
       </div>
 
-      <MessageComposer onSend={send} />
+      <MessageComposer onSend={(t) => void send(t)} />
     </AppShellMobile>
   );
 }
