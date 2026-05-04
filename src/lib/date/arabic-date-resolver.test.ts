@@ -35,4 +35,26 @@ describe("resolveArabicDate", () => {
     expect(r.date).toBeNull();
     expect(r.reason).toBe("flexible");
   });
+
+  it("resolves بعد ساعة as +1 hour from now", () => {
+    const r = resolveArabicDate("بعد ساعة", NOW);
+    expect(r.confidence).toBeGreaterThan(0.9);
+    expect(r.date?.getHours()).toBe(11);
+  });
+
+  it("resolves بعد ساعتين as +2 hours", () => {
+    const r = resolveArabicDate("بعد ساعتين", NOW);
+    expect(r.date?.getHours()).toBe(12);
+  });
+
+  it("resolves نهاية الأسبوع as upcoming Friday", () => {
+    const r = resolveArabicDate("نهاية الأسبوع", NOW);
+    expect(r.date?.getDay()).toBe(5);
+  });
+
+  it("resolves آخر الشهر as last day of month", () => {
+    const r = resolveArabicDate("آخر الشهر", NOW);
+    expect(r.date?.getMonth()).toBe(4); // May
+    expect(r.date?.getDate()).toBe(31);
+  });
 });

@@ -6,6 +6,8 @@ import {
   Calendar,
   Globe,
   LogOut,
+  RotateCcw,
+  Sparkles,
   Trash2,
   User,
   Users,
@@ -14,6 +16,9 @@ import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/components/ui/use-toast";
+import { usePlanStore } from "@/lib/store/plan-store";
+import { DEMO_PLAN } from "@/lib/mock/demo-plan";
 
 interface RowProps {
   icon: React.ReactNode;
@@ -58,6 +63,23 @@ function Row({ icon, title, desc, danger, onClick }: RowProps) {
 }
 
 export default function SettingsPage() {
+  const { toast } = useToast();
+  const setPlan = usePlanStore((s) => s.setPlan);
+  const reset = usePlanStore((s) => s.reset);
+
+  function loadDemo() {
+    setPlan(DEMO_PLAN);
+    toast({
+      title: "تم تحميل الخطة التجريبية",
+      variant: "success",
+    });
+  }
+
+  function clearPlan() {
+    reset();
+    toast({ title: "أُفرغت الخطة الحالية" });
+  }
+
   return (
     <AppShellMobile>
       <TopBar title="الإعدادات" showBack />
@@ -89,6 +111,22 @@ export default function SettingsPage() {
             icon={<Users className="h-4 w-4" />}
             title="الشخصيات"
             desc="سراج وعمر"
+          />
+        </Card>
+
+        <Card className="p-2">
+          <Row
+            icon={<Sparkles className="h-4 w-4" />}
+            title="حمّل خطة تجريبية"
+            desc="استكشف التجربة بدون كتابة أي مهام"
+            onClick={loadDemo}
+          />
+          <Separator />
+          <Row
+            icon={<RotateCcw className="h-4 w-4" />}
+            title="أفرغ الخطة الحالية"
+            desc="ابدأ من الصفر"
+            onClick={clearPlan}
           />
         </Card>
 
