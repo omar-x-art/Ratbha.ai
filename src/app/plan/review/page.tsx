@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { ListChecks, Save } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
 import { MOCK_PLAN } from "@/lib/mock/plans";
 import { usePlanStore } from "@/lib/store/plan-store";
+import { useTasksStore } from "@/lib/store/tasks-store";
 import type { PlanItem } from "@/lib/types";
 
 export default function PlanReviewPage() {
@@ -25,6 +26,7 @@ export default function PlanReviewPage() {
   const postponeItem = usePlanStore((s) => s.postponeItem);
   const pinItem = usePlanStore((s) => s.pinItem);
   const inputText = usePlanStore((s) => s.inputText);
+  const addToChecklist = useTasksStore((s) => s.addFromPlanItems);
 
   // Hydrate the store with mock data the first time the user lands here directly.
   React.useEffect(() => {
@@ -67,6 +69,30 @@ export default function PlanReviewPage() {
     }
   }
 
+  function saveToChecklist() {
+    const items = plan.buckets.flatMap((b) => b.items);
+    if (items.length === 0) {
+      toast({
+        title: "لا توجد مهام لحفظها",
+        description: "أضف مهمة قبل الحفظ.",
+      });
+      return;
+    }
+    const added = addToChecklist(items);
+    toast({
+      title:
+        added > 0
+          ? `حفظنا ${added} مهمة في قائمتك`
+          : "كل المهام محفوظة سابقاً",
+      description:
+        added > 0
+          ? "افتح «قائمة مهامي» لتعليمها بعد الإكمال."
+          : "افتح القائمة لتعليم المنجز.",
+      variant: "success",
+    });
+    setTimeout(() => router.push("/tasks"), 700);
+  }
+
   return (
     <AppShellMobile>
       <TopBar title="راجع وعدّل" showBack />
@@ -85,14 +111,23 @@ export default function PlanReviewPage() {
         ))}
 
         <ReassureBar className="mt-2 text-center">
-          لن نحفظ أي شيء في تقويمك قبل ضغطك على «احفظ».
+          لن نحفظ أي شيء قبل ضغطك على واحد من الزرّين.
         </ReassureBar>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-[480px] flex-col gap-2 border-t border-border bg-background/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur">
         <Button onClick={saveToCalendar} size="lg" className="w-full">
           <Save className="h-4 w-4" />
-          احفظ في التقويم
+          احفظ في Google Calendar
+        </Button>
+        <Button
+          onClick={saveToChecklist}
+          size="lg"
+          variant="soft"
+          className="w-full"
+        >
+          <ListChecks className="h-4 w-4" />
+          احفظ كقائمة مهام في التطبيق
         </Button>
       </div>
 
