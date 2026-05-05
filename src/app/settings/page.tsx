@@ -4,8 +4,10 @@ import * as React from "react";
 import {
   Bell,
   Calendar,
+  CalendarRange,
   Download,
   Globe,
+  History,
   LogOut,
   RotateCcw,
   Sparkles,
@@ -134,6 +136,22 @@ export default function SettingsPage() {
             icon={<Bell className="h-4 w-4" />}
             title="الإشعارات"
             desc="تذكيرات قبل المهام"
+          />
+        </Card>
+
+        <Card className="p-2">
+          <Row
+            icon={<CalendarRange className="h-4 w-4" />}
+            title="جدولي الكامل"
+            desc="اليوم / الأسبوع / الشهر"
+            onClick={() => (window.location.href = "/schedule")}
+          />
+          <Separator />
+          <Row
+            icon={<History className="h-4 w-4" />}
+            title="خططي السابقة"
+            desc="عرض سجل الخطط المحفوظة"
+            onClick={() => (window.location.href = "/plans")}
           />
         </Card>
 
