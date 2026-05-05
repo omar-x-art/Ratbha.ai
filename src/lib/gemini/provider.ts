@@ -12,7 +12,7 @@ import {
 } from "@/lib/gemini/schema";
 import { extractTasksLocal } from "@/lib/gemini/local-extractor";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-flash-latest";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export interface ExtractOptions {
