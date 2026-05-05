@@ -8,6 +8,7 @@ import {
   Download,
   Globe,
   History,
+  ListChecks,
   LogOut,
   RotateCcw,
   Sparkles,
@@ -152,6 +153,13 @@ export default function SettingsPage() {
             title="خططي السابقة"
             desc="عرض سجل الخطط المحفوظة"
             onClick={() => (window.location.href = "/plans")}
+          />
+          <Separator />
+          <Row
+            icon={<ListChecks className="h-4 w-4" />}
+            title="قائمة مهامي"
+            desc="قائمة سريعة بدون تقويم — علّم على المنجز"
+            onClick={() => (window.location.href = "/tasks")}
           />
         </Card>
 
