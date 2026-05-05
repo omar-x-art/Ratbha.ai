@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const days = Math.min(
     Math.max(parseInt(url.searchParams.get("days") ?? "7", 10), 1),
-    30
+    62
   );
   const end = new Date(now.getTime() + days * 24 * 3600 * 1000);
 

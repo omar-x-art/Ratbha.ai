@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Calendar } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { ChatThread } from "@/components/chat/ChatThread";
@@ -9,6 +11,7 @@ import { ChatBubble } from "@/components/chat/ChatBubble";
 import { SuggestionChips, type Chip } from "@/components/chat/SuggestionChips";
 import { MessageComposer } from "@/components/chat/MessageComposer";
 import { TypingDots } from "@/components/chat/TypingDots";
+import { Button } from "@/components/ui/button";
 import { WELCOME_MESSAGES, SUGGESTION_CHIPS } from "@/lib/mock/messages";
 import { usePlanStore } from "@/lib/store/plan-store";
 import { buildPlanFromExtraction } from "@/lib/pipeline/build-plan";
@@ -89,19 +92,33 @@ export default function ChatHomePage() {
     void send(chip.label);
   }
 
-  const connectionPill = session?.connected ? (
-    <span
-      className="me-1 inline-flex items-center gap-1 rounded-chip bg-primary-50 px-2 py-1 text-[11px] text-primary-700"
-      title={session.email}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-primary-600" />
-      متصل
-    </span>
-  ) : null;
+  const rightSlot = (
+    <div className="flex items-center gap-1">
+      {session?.connected && (
+        <span
+          className="me-1 inline-flex items-center gap-1 rounded-chip bg-primary-50 px-2 py-1 text-[11px] text-primary-700"
+          title={session.email}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-primary-600" />
+          متصل
+        </span>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="جدولي"
+        asChild
+      >
+        <Link href="/schedule">
+          <Calendar className="h-5 w-5" />
+        </Link>
+      </Button>
+    </div>
+  );
 
   return (
     <AppShellMobile withComposerSpace>
-      <TopBar title="رتّبها" showSettings rightSlot={connectionPill} />
+      <TopBar title="رتّبها" showSettings rightSlot={rightSlot} />
       <ChatThread>
         {messages.map((m) => (
           <ChatBubble

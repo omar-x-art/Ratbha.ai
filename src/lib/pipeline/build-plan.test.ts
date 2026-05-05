@@ -33,10 +33,39 @@ describe("buildPlanFromExtraction (offline / local extractor)", () => {
     expect(fixed!.is_locked).toBe(true);
   });
 
-  it("sends ambiguous tasks to the inbox", () => {
-    const extraction = extractTasksLocal("راجع الفواتير لما أفضى");
+  it("routes ambiguous date_expression to inbox", () => {
+    const extraction: import("@/lib/gemini/schema").TaskExtraction = {
+      language: "ar",
+      timezone: "Asia/Riyadh",
+      tasks: [
+        {
+          title: "راجع الفواتير",
+          date_expression: "لما أفضى",
+          resolved_date_hint: null,
+          time_expression: null,
+          duration_minutes: 30,
+          priority: "medium",
+          energy: "medium",
+          flexibility: "flexible",
+          type: "task",
+          confidence: 0.7,
+        },
+      ],
+      fixed_events_mentioned: [],
+      ambiguities: [],
+    };
     const plan = buildPlanFromExtraction(extraction, { now: NOW });
     expect(plan.inbox.length).toBeGreaterThan(0);
+  });
+
+  it("auto-suggests a day for tasks without an explicit date_expression", () => {
+    const extraction = extractTasksLocal("راجع الفواتير");
+    const plan = buildPlanFromExtraction(extraction, { now: NOW });
+    // Should NOT go to inbox — should appear in a bucket so the user
+    // can edit/move it via the UI rather than having to type a date.
+    expect(plan.inbox.length).toBe(0);
+    const allItems = plan.buckets.flatMap((b) => b.items);
+    expect(allItems.length).toBeGreaterThan(0);
   });
 
   it("avoids overlapping with provided busy blocks", () => {

@@ -21,7 +21,22 @@ export default function PlanPreviewPage() {
   const router = useRouter();
   const storedPlan = usePlanStore((s) => s.plan);
   const inputText = usePlanStore((s) => s.inputText);
+  const assignInboxTask = usePlanStore((s) => s.assignInboxTask);
   const plan = storedPlan ?? MOCK_PLAN;
+
+  function handleInboxPick(taskId: string, daysFromToday: number) {
+    assignInboxTask(taskId, daysFromToday);
+    toast({
+      title: "تمّت إضافة المهمة",
+      description:
+        daysFromToday === 0
+          ? "أضفتها لخطة اليوم."
+          : daysFromToday === 1
+            ? "أضفتها لغد."
+            : "أضفتها لجدول الأسبوع.",
+      variant: "success",
+    });
+  }
 
   const totalToday =
     plan.buckets.find((b) => b.label === "today")?.items.length ?? 0;
@@ -92,6 +107,11 @@ export default function PlanPreviewPage() {
                   { id: "p-tomorrow", label: "بكرة" },
                   { id: "p-week", label: "هذا الأسبوع" },
                 ]}
+                onPick={(chip) => {
+                  const days =
+                    chip.id === "p-today" ? 0 : chip.id === "p-tomorrow" ? 1 : 3;
+                  handleInboxPick(task.id, days);
+                }}
               />
             ))}
           </DaySection>

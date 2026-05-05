@@ -102,7 +102,9 @@ export function buildPlanFromExtraction(
       ? resolveArabicDate(t.date_expression, now)
       : { date: null, confidence: 0, reason: "no_date" };
 
-    if (!resolved.date || resolved.confidence < 0.5) {
+    // Ambiguous date_expression (e.g. resolver returned low confidence) →
+    // ask user via inbox.
+    if (t.date_expression && (!resolved.date || resolved.confidence < 0.5)) {
       inbox.push({
         id,
         title: t.title,
@@ -112,14 +114,28 @@ export function buildPlanFromExtraction(
         priority: t.priority,
         energy: t.energy,
         flexibility: t.flexibility,
-        reason: t.date_expression
-          ? `قلت «${t.date_expression}» — متى يناسبك؟`
-          : "لم أحدد لها يوماً، متى تفضّل؟",
+        reason: `قلت «${t.date_expression}» — متى يناسبك؟`,
       });
       continue;
     }
 
-    const dayStart = new Date(resolved.date);
+    // No date_expression at all: propose a default day based on priority,
+    // so the user always sees the task in the plan (and can reschedule it
+    // via Edit if they prefer).
+    let effectiveDate = resolved.date;
+    if (!effectiveDate) {
+      const offsetDays =
+        t.priority === "urgent" || t.priority === "high"
+          ? 0
+          : t.priority === "low"
+            ? 3
+            : 1;
+      const proposed = new Date(now);
+      proposed.setDate(proposed.getDate() + offsetDays);
+      effectiveDate = proposed;
+    }
+
+    const dayStart = new Date(effectiveDate);
     dayStart.setHours(0, 0, 0, 0);
     const key = ymd(dayStart);
     if (!dayRequests.has(key)) dayRequests.set(key, []);
