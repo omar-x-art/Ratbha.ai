@@ -11,6 +11,8 @@ import { auditLog } from "@/lib/supabase/audit";
 
 const STATE_COOKIE = "rattabha-oauth-state";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");

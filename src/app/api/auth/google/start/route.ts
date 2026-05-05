@@ -4,6 +4,8 @@ import { buildAuthorizeUrl } from "@/lib/google/oauth";
 
 const STATE_COOKIE = "rattabha-oauth-state";
 
+export const dynamic = "force-dynamic";
+
 function makeState(): string {
   return (
     Date.now().toString(36) +
