@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Calendar, ExternalLink, Plus } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { NextTaskWidget } from "@/components/plan/NextTaskWidget";
@@ -61,12 +61,32 @@ export default function TodayPage() {
           onReorganize={() => router.push("/plan/preview")}
         />
 
-        <Button asChild size="lg" variant="soft" className="self-start">
-          <Link href="/">
-            <Plus className="h-4 w-4" />
-            أضف مهام جديدة
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Button asChild size="md" variant="soft">
+              <Link href="/schedule">
+                <Calendar className="h-4 w-4" />
+                جدولي الكامل
+              </Link>
+            </Button>
+            <Button asChild size="md" variant="outline">
+              <a
+                href="https://calendar.google.com/calendar/u/0/r"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Google Calendar
+              </a>
+            </Button>
+          </div>
+          <Button asChild size="lg" variant="soft" className="self-start">
+            <Link href="/">
+              <Plus className="h-4 w-4" />
+              أضف مهام جديدة
+            </Link>
+          </Button>
+        </div>
       </div>
     </AppShellMobile>
   );
