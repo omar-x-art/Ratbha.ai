@@ -1,38 +1,35 @@
 import { create } from "zustand";
 import type { PlanItem, DayBucket, Task } from "@/lib/types";
 import { MOCK_PLAN } from "@/lib/mock/plans";
-
-interface TaskActionsState {
-  open: boolean;
-  item: PlanItem | null;
-  mode: "status" | "actions";
-}
+import type { PillStatus } from "@/components/plan/StatusPill";
 
 interface TasksStore {
   buckets: DayBucket[];
   inbox: Task[];
-  actionsSheet: TaskActionsState;
   searchQuery: string;
+  itemStatuses: Record<string, PillStatus>;
 
-  setBuckets: (buckets: DayBucket[]) => void;
   updateItem: (id: string, patch: Partial<PlanItem>) => void;
   removeItem: (id: string) => void;
   postponeItem: (id: string) => void;
   pinItem: (id: string) => void;
+  markDone: (id: string) => void;
+  setItemStatus: (id: string, status: PillStatus) => void;
   setInbox: (inbox: Task[]) => void;
   resolveInboxTask: (id: string) => void;
-  openActionsSheet: (item: PlanItem, mode?: "status" | "actions") => void;
-  closeActionsSheet: () => void;
   setSearchQuery: (q: string) => void;
+  reset: () => void;
 }
 
-export const useTasksStore = create<TasksStore>((set) => ({
-  buckets: MOCK_PLAN.buckets,
-  inbox: MOCK_PLAN.inbox,
-  actionsSheet: { open: false, item: null, mode: "actions" },
+const initialState = {
+  buckets: MOCK_PLAN.buckets as DayBucket[],
+  inbox: MOCK_PLAN.inbox as Task[],
   searchQuery: "",
+  itemStatuses: {} as Record<string, PillStatus>,
+};
 
-  setBuckets: (buckets) => set({ buckets }),
+export const useTasksStore = create<TasksStore>((set) => ({
+  ...initialState,
 
   updateItem: (id, patch) =>
     set((s) => ({
@@ -48,7 +45,6 @@ export const useTasksStore = create<TasksStore>((set) => ({
         ...b,
         items: b.items.filter((it) => it.id !== id),
       })),
-      actionsSheet: { open: false, item: null, mode: "actions" },
     })),
 
   postponeItem: (id) =>
@@ -70,7 +66,6 @@ export const useTasksStore = create<TasksStore>((set) => ({
             : it
         ),
       })),
-      actionsSheet: { open: false, item: null, mode: "actions" },
     })),
 
   pinItem: (id) =>
@@ -81,7 +76,16 @@ export const useTasksStore = create<TasksStore>((set) => ({
           it.id === id ? { ...it, is_locked: true } : it
         ),
       })),
-      actionsSheet: { open: false, item: null, mode: "actions" },
+    })),
+
+  markDone: (id) =>
+    set((s) => ({
+      itemStatuses: { ...s.itemStatuses, [id]: "done" },
+    })),
+
+  setItemStatus: (id, status) =>
+    set((s) => ({
+      itemStatuses: { ...s.itemStatuses, [id]: status },
     })),
 
   setInbox: (inbox) => set({ inbox }),
@@ -91,13 +95,7 @@ export const useTasksStore = create<TasksStore>((set) => ({
       inbox: s.inbox.filter((t) => t.id !== id),
     })),
 
-  openActionsSheet: (item, mode = "actions") =>
-    set({ actionsSheet: { open: true, item, mode } }),
-
-  closeActionsSheet: () =>
-    set((s) => ({
-      actionsSheet: { open: false, item: null, mode: s.actionsSheet.mode },
-    })),
-
   setSearchQuery: (searchQuery) => set({ searchQuery }),
+
+  reset: () => set(initialState),
 }));

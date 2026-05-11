@@ -14,13 +14,22 @@ import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
 import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
-import { MOCK_PLAN } from "@/lib/mock/plans";
-import type { DayBucket, PlanItem } from "@/lib/types";
+import { useTasksStore } from "@/lib/store/tasks-store";
+import type { PlanItem } from "@/lib/types";
+import type { PillStatus } from "@/components/plan/StatusPill";
 
 export default function PlanReviewPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [buckets, setBuckets] = React.useState<DayBucket[]>(MOCK_PLAN.buckets);
+
+  const buckets = useTasksStore((s) => s.buckets);
+  const itemStatuses = useTasksStore((s) => s.itemStatuses);
+  const updateItem = useTasksStore((s) => s.updateItem);
+  const removeItem = useTasksStore((s) => s.removeItem);
+  const postponeItem = useTasksStore((s) => s.postponeItem);
+  const pinItem = useTasksStore((s) => s.pinItem);
+  const setItemStatus = useTasksStore((s) => s.setItemStatus);
+
   const [editing, setEditing] = React.useState<PlanItem | null>(null);
   const [open, setOpen] = React.useState(false);
   const [actionsSheet, setActionsSheet] = React.useState<{
@@ -32,55 +41,34 @@ export default function PlanReviewPage() {
     item: PlanItem | null;
   }>({ open: false, item: null });
 
+  function getItemStatus(item: PlanItem): PillStatus {
+    if (itemStatuses[item.id]) return itemStatuses[item.id];
+    if (item.is_locked) return "active";
+    return "planned";
+  }
+
   function openEdit(item: PlanItem) {
     setEditing(item);
     setOpen(true);
   }
 
-  function applyToBuckets(updater: (items: PlanItem[]) => PlanItem[]) {
-    setBuckets((prev) =>
-      prev.map((b) => ({
-        ...b,
-        items: updater(b.items),
-      }))
-    );
-  }
-
   function onSaveItem(next: PlanItem) {
-    applyToBuckets((items) =>
-      items.map((it) => (it.id === next.id ? next : it))
-    );
+    updateItem(next.id, next);
+    setOpen(false);
   }
 
   function onDelete(id: string) {
-    applyToBuckets((items) => items.filter((it) => it.id !== id));
+    removeItem(id);
     setOpen(false);
   }
 
   function onPostpone(id: string) {
-    applyToBuckets((items) =>
-      items.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              start_time: new Date(
-                new Date(it.start_time).getTime() + 24 * 60 * 60 * 1000
-              ).toISOString(),
-              end_time: new Date(
-                new Date(it.end_time).getTime() + 24 * 60 * 60 * 1000
-              ).toISOString(),
-              reason: "أجّلتها للغد",
-            }
-          : it
-      )
-    );
+    postponeItem(id);
     setOpen(false);
   }
 
   function onPin(id: string) {
-    applyToBuckets((items) =>
-      items.map((it) => (it.id === id ? { ...it, is_locked: true } : it))
-    );
+    pinItem(id);
     setOpen(false);
   }
 
@@ -93,12 +81,11 @@ export default function PlanReviewPage() {
     setTimeout(() => router.push("/today"), 700);
   }
 
-  function openActions(item: PlanItem) {
-    setActionsSheet({ open: true, item });
-  }
-
-  function openStatusPicker(item: PlanItem) {
-    setStatusSheet({ open: true, item });
+  function handleStatusPick(status: PillStatus) {
+    if (!statusSheet.item) return;
+    setItemStatus(statusSheet.item.id, status);
+    toast({ title: "تم تغيير الحالة" });
+    setStatusSheet({ open: false, item: null });
   }
 
   return (
@@ -126,9 +113,10 @@ export default function PlanReviewPage() {
               <TaskItem
                 key={item.id}
                 item={item}
+                pillStatus={getItemStatus(item)}
                 onEdit={openEdit}
-                onActionsClick={openActions}
-                onStatusClick={openStatusPicker}
+                onActionsClick={(i) => setActionsSheet({ open: true, item: i })}
+                onStatusClick={(i) => setStatusSheet({ open: true, item: i })}
               />
             ))}
             {bucket.items.length === 0 && (
@@ -166,12 +154,16 @@ export default function PlanReviewPage() {
         onOpenChange={(o) => setActionsSheet((p) => ({ ...p, open: o }))}
         item={actionsSheet.item}
         onEdit={openEdit}
-        onPostpone={(id) => {
-          onPostpone(id);
+        onPostpone={() => {
+          if (actionsSheet.item) onPostpone(actionsSheet.item.id);
           setActionsSheet({ open: false, item: null });
         }}
-        onDelete={(id) => {
-          onDelete(id);
+        onDelete={() => {
+          if (actionsSheet.item) onDelete(actionsSheet.item.id);
+          setActionsSheet({ open: false, item: null });
+        }}
+        onPin={() => {
+          if (actionsSheet.item) onPin(actionsSheet.item.id);
           setActionsSheet({ open: false, item: null });
         }}
       />
@@ -179,11 +171,8 @@ export default function PlanReviewPage() {
       <StatusPickerSheet
         open={statusSheet.open}
         onOpenChange={(o) => setStatusSheet((p) => ({ ...p, open: o }))}
-        current="planned"
-        onPick={() => {
-          toast({ title: "تم تغيير الحالة" });
-          setStatusSheet({ open: false, item: null });
-        }}
+        current={statusSheet.item ? getItemStatus(statusSheet.item) : "planned"}
+        onPick={handleStatusPick}
       />
     </AppShellMobile>
   );

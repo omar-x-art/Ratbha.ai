@@ -15,13 +15,21 @@ import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
 import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { SkeletonGroup } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
-import { MOCK_PLAN, nextUpcomingItem } from "@/lib/mock/plans";
+import { useTasksStore } from "@/lib/store/tasks-store";
 import type { PlanItem } from "@/lib/types";
+import type { PillStatus } from "@/components/plan/StatusPill";
 
 export default function TodayPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [item, setItem] = React.useState(() => nextUpcomingItem(MOCK_PLAN));
+
+  const buckets = useTasksStore((s) => s.buckets);
+  const itemStatuses = useTasksStore((s) => s.itemStatuses);
+  const removeItem = useTasksStore((s) => s.removeItem);
+  const postponeItem = useTasksStore((s) => s.postponeItem);
+  const markDone = useTasksStore((s) => s.markDone);
+  const setItemStatus = useTasksStore((s) => s.setItemStatus);
+
   const [search, setSearch] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [actionsSheet, setActionsSheet] = React.useState<{
@@ -33,32 +41,53 @@ export default function TodayPage() {
     item: PlanItem | null;
   }>({ open: false, item: null });
 
-  function done() {
-    toast({ title: "أحسنت! تم إنجاز المهمة.", variant: "success" });
-    setItem(null);
+  const allItems = buckets.flatMap((b) => b.items);
+  const doneCount = allItems.filter(
+    (i) => itemStatuses[i.id] === "done"
+  ).length;
+  const nextItem = allItems.find((i) => itemStatuses[i.id] !== "done") ?? null;
+
+  const todayBucket = buckets.find((b) => b.label === "today");
+  const tomorrowBucket = buckets.find((b) => b.label === "tomorrow");
+  const laterBuckets = buckets.filter(
+    (b) => b.label !== "today" && b.label !== "tomorrow"
+  );
+
+  function getItemStatus(item: PlanItem): PillStatus {
+    if (itemStatuses[item.id]) return itemStatuses[item.id];
+    if (item.is_locked) return "active";
+    return "planned";
   }
 
-  function postpone() {
-    toast({
-      title: "أجّلنا المهمة",
-      description: "سنقترح لها وقتاً آخر لاحقاً.",
-    });
+  function handleDone(item: PlanItem) {
+    markDone(item.id);
+    toast({ title: `تم إنجاز: ${item.title}`, variant: "success" });
   }
 
-  function openActions(planItem: PlanItem) {
-    setActionsSheet({ open: true, item: planItem });
+  function handleDelete(item: PlanItem) {
+    removeItem(item.id);
+    toast({ title: `تم حذف: ${item.title}`, variant: "danger" });
   }
 
-  function openStatusPicker(planItem: PlanItem) {
-    setStatusSheet({ open: true, item: planItem });
+  function handlePostpone() {
+    if (!actionsSheet.item) return;
+    postponeItem(actionsSheet.item.id);
+    toast({ title: "تم تأجيل المهمة للغد" });
+    setActionsSheet({ open: false, item: null });
   }
 
-  function handleItemDone(planItem: PlanItem) {
-    toast({ title: `تم إنجاز: ${planItem.title}`, variant: "success" });
+  function handleDeleteFromSheet() {
+    if (!actionsSheet.item) return;
+    removeItem(actionsSheet.item.id);
+    toast({ title: "تم حذف المهمة", variant: "danger" });
+    setActionsSheet({ open: false, item: null });
   }
 
-  function handleItemDelete(planItem: PlanItem) {
-    toast({ title: `تم حذف: ${planItem.title}`, variant: "danger" });
+  function handleStatusPick(status: PillStatus) {
+    if (!statusSheet.item) return;
+    setItemStatus(statusSheet.item.id, status);
+    toast({ title: "تم تغيير الحالة" });
+    setStatusSheet({ open: false, item: null });
   }
 
   async function refresh() {
@@ -68,17 +97,36 @@ export default function TodayPage() {
     toast({ title: "تم التحديث", variant: "success" });
   }
 
-  const buckets = MOCK_PLAN.buckets;
-  const todayBucket = buckets.find((b) => b.label === "today");
-  const tomorrowBucket = buckets.find((b) => b.label === "tomorrow");
-  const laterBuckets = buckets.filter(
-    (b) => b.label !== "today" && b.label !== "tomorrow"
-  );
-
-  const allItems = buckets.flatMap((b) => b.items);
-  const doneCount = allItems.filter(
-    (i) => i.item_type === "existing_event" || i.is_locked
-  ).length;
+  function renderBucket(
+    bucket: { date: string; label: string; arabicLabel: string; items: PlanItem[] },
+    color: "primary" | "warning" | "secondary",
+    showAdd?: boolean
+  ) {
+    const filtered = bucket.items.filter(
+      (i) => !search || i.title.includes(search)
+    );
+    if (filtered.length === 0 && !search) return null;
+    return (
+      <GroupHeader
+        label={bucket.arabicLabel}
+        count={filtered.length}
+        color={color}
+        onAdd={showAdd ? () => router.push("/chat") : undefined}
+      >
+        {filtered.map((planItem) => (
+          <SwipeableTaskItem
+            key={planItem.id}
+            item={planItem}
+            pillStatus={getItemStatus(planItem)}
+            onDone={handleDone}
+            onDelete={handleDelete}
+            onActionsClick={(i) => setActionsSheet({ open: true, item: i })}
+            onStatusClick={(i) => setStatusSheet({ open: true, item: i })}
+          />
+        ))}
+      </GroupHeader>
+    );
+  }
 
   return (
     <AppShellMobile withBottomNav>
@@ -89,16 +137,23 @@ export default function TodayPage() {
           <DayProgressBar total={allItems.length} done={doneCount} />
 
           <NextTaskWidget
-            item={item}
-            onDone={done}
-            onPostpone={postpone}
+            item={nextItem}
+            onDone={() => {
+              if (nextItem) handleDone(nextItem);
+            }}
+            onPostpone={() => {
+              if (nextItem) {
+                postponeItem(nextItem.id);
+                toast({ title: "أجّلنا المهمة" });
+              }
+            }}
             onReorganize={() => router.push("/plan/preview")}
           />
 
           <QuickFindBar
             value={search}
             onChange={setSearch}
-            onAdd={() => router.push("/")}
+            onAdd={() => router.push("/chat")}
           />
 
           {loading ? (
@@ -108,79 +163,9 @@ export default function TodayPage() {
             </>
           ) : (
             <>
-              {todayBucket && todayBucket.items.length > 0 && (
-                <GroupHeader
-                  label="اليوم"
-                  count={todayBucket.items.length}
-                  color="primary"
-                  onAdd={() => router.push("/")}
-                >
-                  {todayBucket.items
-                    .filter(
-                      (i) =>
-                        !search || i.title.includes(search)
-                    )
-                    .map((planItem) => (
-                      <SwipeableTaskItem
-                        key={planItem.id}
-                        item={planItem}
-                        onDone={handleItemDone}
-                        onDelete={handleItemDelete}
-                        onActionsClick={openActions}
-                        onStatusClick={openStatusPicker}
-                      />
-                    ))}
-                </GroupHeader>
-              )}
-
-              {tomorrowBucket && tomorrowBucket.items.length > 0 && (
-                <GroupHeader
-                  label="غداً"
-                  count={tomorrowBucket.items.length}
-                  color="warning"
-                >
-                  {tomorrowBucket.items
-                    .filter(
-                      (i) =>
-                        !search || i.title.includes(search)
-                    )
-                    .map((planItem) => (
-                      <SwipeableTaskItem
-                        key={planItem.id}
-                        item={planItem}
-                        onDone={handleItemDone}
-                        onDelete={handleItemDelete}
-                        onActionsClick={openActions}
-                        onStatusClick={openStatusPicker}
-                      />
-                    ))}
-                </GroupHeader>
-              )}
-
-              {laterBuckets.map((bucket) => (
-                <GroupHeader
-                  key={bucket.date}
-                  label={bucket.arabicLabel}
-                  count={bucket.items.length}
-                  color="secondary"
-                >
-                  {bucket.items
-                    .filter(
-                      (i) =>
-                        !search || i.title.includes(search)
-                    )
-                    .map((planItem) => (
-                      <SwipeableTaskItem
-                        key={planItem.id}
-                        item={planItem}
-                        onDone={handleItemDone}
-                        onDelete={handleItemDelete}
-                        onActionsClick={openActions}
-                        onStatusClick={openStatusPicker}
-                      />
-                    ))}
-                </GroupHeader>
-              ))}
+              {todayBucket && renderBucket(todayBucket, "primary", true)}
+              {tomorrowBucket && renderBucket(tomorrowBucket, "warning")}
+              {laterBuckets.map((b) => renderBucket(b, "secondary"))}
             </>
           )}
         </div>
@@ -192,24 +177,15 @@ export default function TodayPage() {
         open={actionsSheet.open}
         onOpenChange={(o) => setActionsSheet((p) => ({ ...p, open: o }))}
         item={actionsSheet.item}
-        onPostpone={() => {
-          toast({ title: "تم تأجيل المهمة" });
-          setActionsSheet({ open: false, item: null });
-        }}
-        onDelete={() => {
-          toast({ title: "تم حذف المهمة", variant: "danger" });
-          setActionsSheet({ open: false, item: null });
-        }}
+        onPostpone={handlePostpone}
+        onDelete={handleDeleteFromSheet}
       />
 
       <StatusPickerSheet
         open={statusSheet.open}
         onOpenChange={(o) => setStatusSheet((p) => ({ ...p, open: o }))}
-        current="planned"
-        onPick={() => {
-          toast({ title: "تم تغيير الحالة" });
-          setStatusSheet({ open: false, item: null });
-        }}
+        current={statusSheet.item ? getItemStatus(statusSheet.item) : "planned"}
+        onPick={handleStatusPick}
       />
     </AppShellMobile>
   );
