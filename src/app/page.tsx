@@ -1,80 +1,191 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  CalendarCheck,
+  ChevronLeft,
+  Clock,
+  ListChecks,
+  Plus,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
-import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
-import { ChatThread } from "@/components/chat/ChatThread";
-import { ChatBubble } from "@/components/chat/ChatBubble";
-import { SuggestionChips, type Chip } from "@/components/chat/SuggestionChips";
-import { MessageComposer } from "@/components/chat/MessageComposer";
-import { TypingDots } from "@/components/chat/TypingDots";
-import { WELCOME_MESSAGES, SUGGESTION_CHIPS } from "@/lib/mock/messages";
-import type { ChatMessage } from "@/lib/types";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { CharacterAvatar } from "@/components/characters/CharacterAvatar";
+import { VoiceButton } from "@/components/voice/VoiceButton";
+import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
+import { DayProgressBar } from "@/components/plan/DayProgressBar";
+import { useVoiceInput } from "@/lib/hooks/use-voice-input";
+import { MOCK_PLAN, nextUpcomingItem } from "@/lib/mock/plans";
+import { formatTimeRange } from "@/lib/utils";
+import { useToast } from "@/components/ui/use-toast";
 
-export default function ChatHomePage() {
+export default function HomePage() {
   const router = useRouter();
-  const [messages, setMessages] = React.useState<ChatMessage[]>(WELCOME_MESSAGES);
-  const [thinking, setThinking] = React.useState(false);
+  const { toast } = useToast();
+  const nextItem = nextUpcomingItem(MOCK_PLAN);
 
-  function go() {
-    setTimeout(() => {
-      router.push("/plan/preview");
-    }, 900);
-  }
+  const todayBucket = MOCK_PLAN.buckets.find((b) => b.label === "today");
+  const todayCount = todayBucket?.items.length ?? 0;
+  const allItems = MOCK_PLAN.buckets.flatMap((b) => b.items);
+  const doneCount = allItems.filter(
+    (i) => i.item_type === "existing_event" || i.is_locked
+  ).length;
 
-  function send(text: string) {
-    setMessages((prev) => [
-      ...prev,
-      { id: `u-${Date.now()}`, from: "user", text },
-    ]);
-    setThinking(true);
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`,
-          from: "ai",
-          character: "siraj",
-          text: "لحظة... أنظّم لك خطة وأعرضها قبل أي حفظ.",
-        },
-      ]);
-      setThinking(false);
-      go();
-    }, 700);
-  }
+  const today = new Intl.DateTimeFormat("ar-EG", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
 
-  function pickChip(chip: Chip) {
-    send(chip.label);
+  const {
+    isListening,
+    interimTranscript,
+    isSupported: voiceSupported,
+    startListening,
+    stopListening,
+    resetTranscript,
+  } = useVoiceInput({
+    lang: "ar-SA",
+    continuous: false,
+    interimResults: true,
+    onResult: (text, isFinal) => {
+      if (isFinal) {
+        toast({ title: `تم التسجيل: "${text}"`, description: "جاري التوجيه للشات..." });
+        setTimeout(() => router.push(`/chat?q=${encodeURIComponent(text)}`), 800);
+      }
+    },
+  });
+
+  function toggleVoice() {
+    if (isListening) {
+      stopListening();
+      resetTranscript();
+    } else {
+      startListening();
+    }
   }
 
   return (
-    <AppShellMobile withComposerSpace withBottomNav>
-      <TopBar title="رتّبها" showSettings />
-      <ChatThread>
-        {messages.map((m) => (
-          <ChatBubble
-            key={m.id}
-            from={m.from}
-            character={m.character}
-            characterState={m.from === "ai" ? "happy" : "neutral"}
+    <AppShellMobile withBottomNav>
+      <div className="flex flex-col gap-5 px-4 pb-8 pt-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CharacterAvatar who="siraj" state="happy" size={52} />
+            <div>
+              <h1 className="text-[22px] font-bold leading-tight">أهلًا بك</h1>
+              <p className="text-[13px] text-muted-foreground">{today}</p>
+            </div>
+          </div>
+          <Link
+            href="/settings"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground"
           >
-            {m.text}
-          </ChatBubble>
-        ))}
-        {thinking && (
-          <ChatBubble from="ai" character="siraj" characterState="thinking">
-            <TypingDots />
-          </ChatBubble>
-        )}
-      </ChatThread>
+            <Sparkles className="h-4 w-4" />
+          </Link>
+        </div>
 
-      <div className="mb-4">
-        <SuggestionChips chips={SUGGESTION_CHIPS} onPick={pickChip} />
+        {/* Progress */}
+        <Card className="p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[14px] font-semibold">تقدم اليوم</span>
+            <Link href="/today" className="flex items-center gap-1 text-[12px] text-primary-700 hover:underline">
+              <span>عرض الكل</span>
+              <ChevronLeft className="h-3 w-3" />
+            </Link>
+          </div>
+          <DayProgressBar total={allItems.length} done={doneCount} />
+        </Card>
+
+        {/* Next task */}
+        {nextItem && (
+          <Card className="border-primary-100 bg-primary-50/40 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary-600" />
+              <span className="text-[12px] font-semibold text-primary-700">
+                المهمة التالية
+              </span>
+            </div>
+            <h3 className="text-[18px] font-bold">{nextItem.title}</h3>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              {formatTimeRange(nextItem.start_time, nextItem.end_time)}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" onClick={() => toast({ title: "تم!", variant: "success" })}>
+                <ListChecks className="h-4 w-4" />
+                تم
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/today")}
+              >
+                عرض يومي
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-3 gap-3">
+          <Link href="/today">
+            <Card className="flex flex-col items-center gap-1 p-4 text-center">
+              <span className="text-[24px] font-bold text-primary-600">{todayCount}</span>
+              <span className="text-[11px] text-muted-foreground">مهام اليوم</span>
+            </Card>
+          </Link>
+          <Link href="/calendar">
+            <Card className="flex flex-col items-center gap-1 p-4 text-center">
+              <CalendarCheck className="h-6 w-6 text-primary-600" />
+              <span className="text-[11px] text-muted-foreground">التقويم</span>
+            </Card>
+          </Link>
+          <Link href="/plan/preview">
+            <Card className="flex flex-col items-center gap-1 p-4 text-center">
+              <TrendingUp className="h-6 w-6 text-primary-600" />
+              <span className="text-[11px] text-muted-foreground">خطتي</span>
+            </Card>
+          </Link>
+        </div>
+
+        {/* Voice input section */}
+        <Card className="flex flex-col items-center gap-3 p-6">
+          <CharacterAvatar who="siraj" state="encouraging" size={64} />
+          <p className="text-center text-[15px] font-semibold">
+            قولي وش عندك وأرتّب لك
+          </p>
+          <p className="text-center text-[12px] text-muted-foreground">
+            اضغط الميكروفون أو اكتب مهامك
+          </p>
+          <VoiceTranscriptOverlay
+            interimTranscript={interimTranscript}
+            isListening={isListening}
+          />
+          <div className="flex items-center gap-3">
+            {voiceSupported && (
+              <VoiceButton
+                isListening={isListening}
+                onStart={toggleVoice}
+                onStop={toggleVoice}
+                size="lg"
+              />
+            )}
+            <Button asChild size="lg">
+              <Link href="/chat">
+                <Plus className="h-4 w-4" />
+                اكتب مهامك
+              </Link>
+            </Button>
+          </div>
+        </Card>
       </div>
 
-      <MessageComposer onSend={send} />
       <BottomNav />
     </AppShellMobile>
   );
