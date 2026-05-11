@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
+import { BottomNav } from "@/components/shell/BottomNav";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
@@ -59,7 +60,7 @@ function Row({ icon, title, desc, danger, onClick }: RowProps) {
 
 export default function SettingsPage() {
   return (
-    <AppShellMobile>
+    <AppShellMobile withBottomNav>
       <TopBar title="الإعدادات" showBack />
       <div className="flex flex-col gap-3 px-4 py-4">
         <Card className="p-2">
@@ -105,6 +106,8 @@ export default function SettingsPage() {
           />
         </Card>
       </div>
+
+      <BottomNav />
     </AppShellMobile>
   );
 }

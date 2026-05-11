@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
+import { BottomNav } from "@/components/shell/BottomNav";
 import { ChatThread } from "@/components/chat/ChatThread";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { SuggestionChips, type Chip } from "@/components/chat/SuggestionChips";
@@ -18,7 +19,6 @@ export default function ChatHomePage() {
   const [thinking, setThinking] = React.useState(false);
 
   function go() {
-    // Mock "AI proposes plan" → navigate to plan preview
     setTimeout(() => {
       router.push("/plan/preview");
     }, 900);
@@ -50,7 +50,7 @@ export default function ChatHomePage() {
   }
 
   return (
-    <AppShellMobile withComposerSpace>
+    <AppShellMobile withComposerSpace withBottomNav>
       <TopBar title="رتّبها" showSettings />
       <ChatThread>
         {messages.map((m) => (
@@ -75,6 +75,7 @@ export default function ChatHomePage() {
       </div>
 
       <MessageComposer onSend={send} />
+      <BottomNav />
     </AppShellMobile>
   );
 }

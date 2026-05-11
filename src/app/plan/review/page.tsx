@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
+import { Breadcrumb } from "@/components/shell/Breadcrumb";
 import { Button } from "@/components/ui/button";
 import { ReassureBar } from "@/components/chat/ReassureBar";
-import { DaySection } from "@/components/plan/DaySection";
+import { GroupHeader } from "@/components/plan/GroupHeader";
 import { TaskItem } from "@/components/plan/TaskItem";
+import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
+import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
 import { MOCK_PLAN } from "@/lib/mock/plans";
@@ -20,6 +23,14 @@ export default function PlanReviewPage() {
   const [buckets, setBuckets] = React.useState<DayBucket[]>(MOCK_PLAN.buckets);
   const [editing, setEditing] = React.useState<PlanItem | null>(null);
   const [open, setOpen] = React.useState(false);
+  const [actionsSheet, setActionsSheet] = React.useState<{
+    open: boolean;
+    item: PlanItem | null;
+  }>({ open: false, item: null });
+  const [statusSheet, setStatusSheet] = React.useState<{
+    open: boolean;
+    item: PlanItem | null;
+  }>({ open: false, item: null });
 
   function openEdit(item: PlanItem) {
     setEditing(item);
@@ -82,21 +93,50 @@ export default function PlanReviewPage() {
     setTimeout(() => router.push("/today"), 700);
   }
 
+  function openActions(item: PlanItem) {
+    setActionsSheet({ open: true, item });
+  }
+
+  function openStatusPicker(item: PlanItem) {
+    setStatusSheet({ open: true, item });
+  }
+
   return (
-    <AppShellMobile>
+    <AppShellMobile withBottomNav>
       <TopBar title="راجع وعدّل" showBack />
-      <div className="flex flex-col gap-4 px-4 pb-32 pt-4">
-        {buckets.map((bucket) => (
-          <DaySection key={bucket.date} label={bucket.arabicLabel}>
+      <div className="flex flex-col gap-4 px-4 pb-32 pt-3">
+        <Breadcrumb
+          items={[
+            { label: "الرئيسية", href: "/" },
+            { label: "خطة اليوم", href: "/plan/preview" },
+            { label: "تعديل المهام" },
+          ]}
+        />
+
+        {buckets.map((bucket, idx) => (
+          <GroupHeader
+            key={bucket.date}
+            label={bucket.arabicLabel}
+            count={bucket.items.length}
+            color={
+              idx === 0 ? "primary" : idx === 1 ? "warning" : "secondary"
+            }
+          >
             {bucket.items.map((item) => (
-              <TaskItem key={item.id} item={item} onEdit={openEdit} />
+              <TaskItem
+                key={item.id}
+                item={item}
+                onEdit={openEdit}
+                onActionsClick={openActions}
+                onStatusClick={openStatusPicker}
+              />
             ))}
             {bucket.items.length === 0 && (
               <p className="text-[12px] text-muted-foreground">
                 لا توجد مهام في هذا اليوم.
               </p>
             )}
-          </DaySection>
+          </GroupHeader>
         ))}
 
         <ReassureBar className="mt-2 text-center">
@@ -119,6 +159,31 @@ export default function PlanReviewPage() {
         onDelete={onDelete}
         onPostpone={onPostpone}
         onPin={onPin}
+      />
+
+      <TaskActionsSheet
+        open={actionsSheet.open}
+        onOpenChange={(o) => setActionsSheet((p) => ({ ...p, open: o }))}
+        item={actionsSheet.item}
+        onEdit={openEdit}
+        onPostpone={(id) => {
+          onPostpone(id);
+          setActionsSheet({ open: false, item: null });
+        }}
+        onDelete={(id) => {
+          onDelete(id);
+          setActionsSheet({ open: false, item: null });
+        }}
+      />
+
+      <StatusPickerSheet
+        open={statusSheet.open}
+        onOpenChange={(o) => setStatusSheet((p) => ({ ...p, open: o }))}
+        current="planned"
+        onPick={() => {
+          toast({ title: "تم تغيير الحالة" });
+          setStatusSheet({ open: false, item: null });
+        }}
       />
     </AppShellMobile>
   );
