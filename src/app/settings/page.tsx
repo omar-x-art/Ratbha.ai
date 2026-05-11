@@ -4,11 +4,9 @@ import * as React from "react";
 import {
   Bell,
   Calendar,
-  Globe,
   LogOut,
   Trash2,
   User,
-  Users,
 } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
@@ -76,20 +74,6 @@ export default function SettingsPage() {
             icon={<Bell className="h-4 w-4" />}
             title="الإشعارات"
             desc="تذكيرات قبل المهام"
-          />
-        </Card>
-
-        <Card className="p-2">
-          <Row
-            icon={<Globe className="h-4 w-4" />}
-            title="اللغة"
-            desc="العربية"
-          />
-          <Separator />
-          <Row
-            icon={<Users className="h-4 w-4" />}
-            title="الشخصيات"
-            desc="سراج وعمر"
           />
         </Card>
 

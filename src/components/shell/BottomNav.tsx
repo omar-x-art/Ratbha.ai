@@ -3,7 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageSquare, CalendarDays, LayoutGrid, Settings } from "lucide-react";
+import {
+  Home,
+  MessageSquare,
+  CalendarDays,
+  LayoutGrid,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -17,7 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: "/",
     label: "الرئيسية",
-    icon: <MessageSquare className="h-5 w-5" />,
+    icon: <Home className="h-5 w-5" />,
     matchExact: true,
   },
   {
@@ -26,7 +32,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: <LayoutGrid className="h-5 w-5" />,
   },
   {
-    href: "/plan/preview",
+    href: "/chat",
+    label: "شات",
+    icon: <MessageSquare className="h-5 w-5" />,
+    matchExact: true,
+  },
+  {
+    href: "/calendar",
     label: "التقويم",
     icon: <CalendarDays className="h-5 w-5" />,
   },
@@ -62,7 +74,7 @@ export function BottomNav({ className }: BottomNavProps) {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] font-medium transition-colors",
+              "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors",
               isActive
                 ? "text-primary-600"
                 : "text-muted-foreground hover:text-foreground"
