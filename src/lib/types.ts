@@ -23,6 +23,8 @@ export type TaskStatus =
   | "done"
   | "deleted";
 
+export type PillStatus = "active" | "done" | "overdue" | "planned" | "inbox";
+
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type Energy = "low" | "medium" | "high";
 export type Flexibility = "fixed" | "flexible" | "deadline";
@@ -49,8 +51,8 @@ export interface PlanItem {
   id: string;
   task_id?: string;
   title: string;
-  start_time: string; // ISO
-  end_time: string; // ISO
+  start_time: string;
+  end_time: string;
   item_type: ItemType;
   google_event_id?: string | null;
   is_locked?: boolean;
@@ -58,7 +60,7 @@ export interface PlanItem {
 }
 
 export interface DayBucket {
-  date: string; // YYYY-MM-DD
+  date: string;
   label: "today" | "tomorrow" | "later" | "needs_clarification" | string;
   arabicLabel: string;
   items: PlanItem[];
@@ -71,5 +73,5 @@ export interface Plan {
   ai_model?: string;
   input_text?: string;
   buckets: DayBucket[];
-  inbox: Task[]; // ambiguous tasks
+  inbox: Task[];
 }

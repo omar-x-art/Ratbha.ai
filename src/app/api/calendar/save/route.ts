@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { saveCalendarEvents } from "@/lib/google/calendar";
 
 const SaveSchema = z.object({
   items: z.array(
@@ -27,11 +28,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // MVP stub: pretend each item was saved with a fake google_event_id.
-  return NextResponse.json({
-    saved: parsed.data.items.map((it) => ({
-      ...it,
-      google_event_id: `gcal_mock_${it.id}_${Date.now()}`,
-    })),
-  });
+  const result = await saveCalendarEvents(parsed.data.items);
+
+  return NextResponse.json(result);
 }

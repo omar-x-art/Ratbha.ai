@@ -84,11 +84,9 @@ function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn 
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SRInstance | null>(null);
   const isStoppedRef = useRef(false);
-
-  const isSupported =
-    typeof window !== "undefined" && getSpeechRecognition() !== null;
 
   const createRecognition = useCallback(() => {
     const Ctor = getSpeechRecognition();
@@ -148,9 +146,7 @@ function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn 
     if (recognitionRef.current) {
       try {
         recognitionRef.current.abort();
-      } catch {
-        /* noop */
-      }
+      } catch {}
     }
 
     const recognition = createRecognition();
@@ -171,9 +167,7 @@ function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn 
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch {
-        /* noop */
-      }
+      } catch {}
     }
     setIsListening(false);
   }, []);
@@ -184,13 +178,15 @@ function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn 
   }, []);
 
   useEffect(() => {
+    setIsSupported(getSpeechRecognition() !== null);
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
-        } catch {
-          /* noop */
-        }
+        } catch {}
       }
     };
   }, []);

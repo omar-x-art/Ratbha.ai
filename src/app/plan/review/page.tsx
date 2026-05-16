@@ -7,7 +7,6 @@ import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { Breadcrumb } from "@/components/shell/Breadcrumb";
 import { Button } from "@/components/ui/button";
-import { ReassureBar } from "@/components/chat/ReassureBar";
 import { GroupHeader } from "@/components/plan/GroupHeader";
 import { TaskItem } from "@/components/plan/TaskItem";
 import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
@@ -15,8 +14,7 @@ import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
-import type { PlanItem } from "@/lib/types";
-import type { PillStatus } from "@/components/plan/StatusPill";
+import type { PillStatus, PlanItem } from "@/lib/types";
 
 export default function PlanReviewPage() {
   const router = useRouter();
@@ -75,7 +73,7 @@ export default function PlanReviewPage() {
   function saveToCalendar() {
     toast({
       title: "تم حفظ خطتك بنجاح",
-      description: "أضفنا الأحداث إلى Google Calendar (تجريبي).",
+      description: "أضفنا الأحداث إلى تقويم جوجل (تجريبي).",
       variant: "success",
     });
     setTimeout(() => router.push("/today"), 700);
@@ -126,10 +124,6 @@ export default function PlanReviewPage() {
             )}
           </GroupHeader>
         ))}
-
-        <ReassureBar className="mt-2 text-center">
-          لن نحفظ أي شيء في تقويمك قبل ضغطك على «احفظ».
-        </ReassureBar>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-[480px] flex-col gap-2 border-t border-border bg-background/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur">

@@ -13,7 +13,7 @@ const arabic = IBM_Plex_Sans_Arabic({
 export const metadata: Metadata = {
   title: "رتّبها AI — مخطط يومي ذكي",
   description:
-    "اكتب اللي في دماغك، وسنرتّبه داخل تقويمك. تطبيق بسيط للموبايل، عربي أولاً، يحفظ في Google Calendar بعد مراجعتك فقط.",
+    "اكتب اللي في دماغك، وسنرتّبه داخل تقويمك. تطبيق بسيط للموبايل، عربي أولاً، يحفظ في تقويم جوجل بعد مراجعتك فقط.",
   applicationName: "رتّبها AI",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

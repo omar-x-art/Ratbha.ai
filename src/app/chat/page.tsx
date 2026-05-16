@@ -8,12 +8,21 @@ import { ChatThread } from "@/components/chat/ChatThread";
 import { ChatBubble } from "@/components/chat/ChatBubble";
 import { MessageComposer } from "@/components/chat/MessageComposer";
 import { TypingDots } from "@/components/chat/TypingDots";
-import type { ChatMessage } from "@/lib/types";
+import { PlanReviewSheet } from "@/components/plan/PlanReviewSheet";
+import { useToast } from "@/components/ui/use-toast";
+import { useTasksStore } from "@/lib/store/tasks-store";
+import type { ChatMessage, Plan } from "@/lib/types";
+
+interface ParseTasksResponse {
+  plan: Plan;
+}
 
 function ChatContent() {
   const router = useRouter();
+  const { toast } = useToast();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
+  const setPlan = useTasksStore((s) => s.setPlan);
 
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
@@ -25,60 +34,82 @@ function ChatContent() {
   ]);
   const [thinking, setThinking] = React.useState(false);
   const [initialValue, setInitialValue] = React.useState(initialQuery);
+  const [planSheetOpen, setPlanSheetOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    if (initialQuery) {
-      const timer = setTimeout(() => {
-        const q = initialQuery;
-        setMessages((prev) => [
-          ...prev,
-          { id: `u-${Date.now()}`, from: "user", text: q },
-        ]);
-        setThinking(true);
-        setInitialValue("");
-        setTimeout(() => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `a-${Date.now()}`,
-              from: "ai",
-              character: "siraj",
-              text: "لحظة... أنظّم لك خطة وأعرضها قبل أي حفظ.",
-            },
-          ]);
-          setThinking(false);
-          setTimeout(() => router.push("/plan/preview"), 900);
-        }, 700);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function send(text: string) {
+  const processText = React.useCallback(async (text: string) => {
     setMessages((prev) => [
       ...prev,
       { id: `u-${Date.now()}`, from: "user", text },
     ]);
     setThinking(true);
     setInitialValue("");
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/ai/parse-tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          locale: "ar",
+        }),
+      });
+
+      if (!response.ok) throw new Error("parse_failed");
+
+      const data = (await response.json()) as ParseTasksResponse;
+      setPlan(data.plan);
       setMessages((prev) => [
         ...prev,
         {
           id: `a-${Date.now()}`,
           from: "ai",
           character: "siraj",
-          text: "لحظة... أنظّم لك خطة وأعرضها قبل أي حفظ.",
+          text: "رتّبت لك مسودة خطة. راجعها هنا قبل أي حفظ.",
         },
       ]);
       setThinking(false);
-      setTimeout(() => router.push("/plan/preview"), 900);
-    }, 700);
+      setPlanSheetOpen(true);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `a-${Date.now()}`,
+          from: "ai",
+          character: "siraj",
+          text: "لم أقدر أرتّب النص الآن. جرّب تكتبه كمهام قصيرة.",
+        },
+      ]);
+      setThinking(false);
+    }
+  }, [setPlan]);
+
+  React.useEffect(() => {
+    if (!initialQuery) return undefined;
+
+    const timer = setTimeout(() => {
+      processText(initialQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [initialQuery, processText]);
+
+  function send(text: string) {
+    processText(text);
+  }
+
+  function approvePlan() {
+    setPlanSheetOpen(false);
+    toast({
+      title: "تم اعتماد الخطة",
+      description: "رجعناك ليومك لتتابع التنفيذ.",
+      variant: "success",
+    });
+    router.push("/today");
   }
 
   return (
     <>
-      <TopBar title="شات" showBack />
+      <TopBar title="رتّب" showBack />
       <ChatThread>
         {messages.map((m) => (
           <ChatBubble
@@ -100,6 +131,11 @@ function ChatContent() {
         onSend={send}
         initialValue={initialValue}
         withVoice={true}
+      />
+      <PlanReviewSheet
+        open={planSheetOpen}
+        onOpenChange={setPlanSheetOpen}
+        onApprove={approvePlan}
       />
     </>
   );

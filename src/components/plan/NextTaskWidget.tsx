@@ -29,7 +29,7 @@ export function NextTaskWidget({
           <div className="flex flex-col">
             <p className="text-[15px] font-semibold">يومك خفيف</p>
             <p className="text-[13px] text-muted-foreground">
-              لا توجد مهمة قادمة الآن. اكتب مهامك من الشاشة الرئيسية.
+              لا توجد مهمة قادمة الآن. اكتب لسراج من شاشة اليوم ليضيفها فوراً.
             </p>
           </div>
         </div>

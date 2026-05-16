@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import type { PillStatus } from "@/components/plan/StatusPill";
+import type { PillStatus } from "@/lib/types";
 
 interface StatusPickerSheetProps {
   open: boolean;

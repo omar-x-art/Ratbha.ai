@@ -12,15 +12,25 @@ import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { StatusPill } from "@/components/plan/StatusPill";
 import { cn, arabicWeekday } from "@/lib/utils";
-import { MOCK_PLAN } from "@/lib/mock/plans";
-import type { PlanItem } from "@/lib/types";
+import { useTasksStore } from "@/lib/store/tasks-store";
+import type { DayBucket, PillStatus, PlanItem } from "@/lib/types";
 
 type ViewMode = "month" | "week";
 
 const AR_DAYS = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 const AR_MONTHS = [
-  "يناير","فبراير","مارس","أبريل","مايو","يونيو",
-  "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر",
+  "يناير",
+  "فبراير",
+  "مارس",
+  "أبريل",
+  "مايو",
+  "يونيو",
+  "يوليو",
+  "أغسطس",
+  "سبتمبر",
+  "أكتوبر",
+  "نوفمبر",
+  "ديسمبر",
 ];
 
 function getDaysInMonth(year: number, month: number) {
@@ -50,9 +60,9 @@ function getWeekDays(date: Date): Date[] {
   });
 }
 
-function buildEventMap(): Map<string, PlanItem[]> {
+function buildEventMap(buckets: DayBucket[]): Map<string, PlanItem[]> {
   const map = new Map<string, PlanItem[]>();
-  for (const bucket of MOCK_PLAN.buckets) {
+  for (const bucket of buckets) {
     for (const item of bucket.items) {
       const start = new Date(item.start_time);
       const key = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
@@ -67,7 +77,9 @@ function buildEventMap(): Map<string, PlanItem[]> {
 export default function CalendarPage() {
   const [view, setView] = React.useState<ViewMode>("month");
   const [selectedDate, setSelectedDate] = React.useState(new Date());
-  const eventMap = React.useMemo(() => buildEventMap(), []);
+  const buckets = useTasksStore((s) => s.buckets);
+  const itemStatuses = useTasksStore((s) => s.itemStatuses);
+  const eventMap = React.useMemo(() => buildEventMap(buckets), [buckets]);
 
   const currentYear = selectedDate.getFullYear();
   const currentMonth = selectedDate.getMonth();
@@ -103,7 +115,6 @@ export default function CalendarPage() {
       <TopBar title="التقويم" showSettings />
 
       <div className="flex flex-col gap-4 px-4 pb-8 pt-3">
-        {/* Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -144,7 +155,6 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Day headers */}
         <div className="grid grid-cols-7 gap-1 text-center">
           {AR_DAYS.map((d) => (
             <span
@@ -156,7 +166,6 @@ export default function CalendarPage() {
           ))}
         </div>
 
-        {/* Month view */}
         {view === "month" && (
           <MonthGrid
             year={currentYear}
@@ -167,7 +176,6 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Week view */}
         {view === "week" && (
           <WeekGrid
             days={weekDays}
@@ -177,7 +185,6 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Selected day events */}
         <div className="flex flex-col gap-2">
           <h3 className="text-[14px] font-semibold">
             {isSameDay(selectedDate, new Date())
@@ -212,11 +219,7 @@ export default function CalendarPage() {
                     })}
                   </span>
                 </div>
-                <StatusPill
-                  status={
-                    item.is_locked ? "active" : "planned"
-                  }
-                />
+                <StatusPill status={getItemStatus(item, itemStatuses)} />
               </div>
             ))
           )}
@@ -226,6 +229,15 @@ export default function CalendarPage() {
       <BottomNav />
     </AppShellMobile>
   );
+}
+
+function getItemStatus(
+  item: PlanItem,
+  itemStatuses: Record<string, PillStatus>
+): PillStatus {
+  if (itemStatuses[item.id]) return itemStatuses[item.id];
+  if (item.is_locked) return "active";
+  return "planned";
 }
 
 function MonthGrid({
@@ -309,7 +321,6 @@ function WeekGrid({
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[600px]">
-        {/* Day headers */}
         <div className="grid grid-cols-8 border-b border-border pb-1">
           <div />
           {days.map((d) => {
@@ -333,7 +344,6 @@ function WeekGrid({
           })}
         </div>
 
-        {/* Hour rows */}
         <div className="relative">
           {hours.map((h) => (
             <div key={h} className="grid grid-cols-8 border-b border-border/50">

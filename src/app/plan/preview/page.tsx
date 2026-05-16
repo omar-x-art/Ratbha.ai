@@ -10,7 +10,6 @@ import { BottomNav } from "@/components/shell/BottomNav";
 import { Breadcrumb } from "@/components/shell/Breadcrumb";
 import { PullToRefresh } from "@/components/shell/PullToRefresh";
 import { Button } from "@/components/ui/button";
-import { ReassureBar } from "@/components/chat/ReassureBar";
 import { PlanSummaryCard } from "@/components/plan/PlanSummaryCard";
 import { GroupHeader } from "@/components/plan/GroupHeader";
 import { TaskItem } from "@/components/plan/TaskItem";
@@ -19,8 +18,7 @@ import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { InboxCard } from "@/components/plan/InboxCard";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
-import type { PlanItem } from "@/lib/types";
-import type { PillStatus } from "@/components/plan/StatusPill";
+import type { PillStatus, PlanItem } from "@/lib/types";
 
 export default function PlanPreviewPage() {
   const { toast } = useToast();
@@ -57,7 +55,7 @@ export default function PlanPreviewPage() {
   function saveToCalendar() {
     toast({
       title: "تم حفظ خطتك بنجاح",
-      description: "أضفنا الأحداث إلى Google Calendar (تجريبي).",
+      description: "أضفنا الأحداث إلى تقويم جوجل (تجريبي).",
       variant: "success",
     });
     setTimeout(() => router.push("/today"), 700);
@@ -97,7 +95,7 @@ export default function PlanPreviewPage() {
             items={[
               { label: "الرئيسية", href: "/" },
               { label: "خطة اليوم" },
-              { label: "التقرير" },
+              { label: "المراجعة" },
             ]}
           />
 
@@ -163,10 +161,6 @@ export default function PlanPreviewPage() {
               </Button>
             </div>
           </div>
-
-          <ReassureBar className="mt-2 text-center">
-            لن نحفظ أي شيء في تقويمك قبل مراجعتك.
-          </ReassureBar>
         </div>
       </PullToRefresh>
 

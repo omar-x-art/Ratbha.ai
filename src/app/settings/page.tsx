@@ -62,12 +62,12 @@ export default function SettingsPage() {
       <TopBar title="الإعدادات" showBack />
       <div className="flex flex-col gap-3 px-4 py-4">
         <Card className="p-2">
-          <Row icon={<User className="h-4 w-4" />} title="الحساب" desc="ربط Google" />
+          <Row icon={<User className="h-4 w-4" />} title="الحساب" desc="ربط حساب جوجل" />
           <Separator />
           <Row
             icon={<Calendar className="h-4 w-4" />}
             title="التقويم"
-            desc="Google Calendar"
+            desc="تقويم جوجل"
           />
           <Separator />
           <Row

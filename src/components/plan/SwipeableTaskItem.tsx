@@ -3,8 +3,8 @@
 import * as React from "react";
 import { Check, Trash2, MoreVertical } from "lucide-react";
 import { cn, formatTimeRange } from "@/lib/utils";
-import { StatusPill, type PillStatus } from "@/components/plan/StatusPill";
-import type { PlanItem } from "@/lib/types";
+import { StatusPill } from "@/components/plan/StatusPill";
+import type { PillStatus, PlanItem } from "@/lib/types";
 
 interface SwipeableTaskItemProps {
   item: PlanItem;

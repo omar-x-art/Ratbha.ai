@@ -4,13 +4,12 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarCheck,
   ChevronLeft,
   Clock,
   ListChecks,
   Plus,
+  Settings,
   Sparkles,
-  TrendingUp,
 } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { BottomNav } from "@/components/shell/BottomNav";
@@ -21,21 +20,41 @@ import { VoiceButton } from "@/components/voice/VoiceButton";
 import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
 import { DayProgressBar } from "@/components/plan/DayProgressBar";
 import { useVoiceInput } from "@/lib/hooks/use-voice-input";
-import { MOCK_PLAN, nextUpcomingItem } from "@/lib/mock/plans";
 import { formatTimeRange } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
+import { useTasksStore } from "@/lib/store/tasks-store";
+import type { PlanItem } from "@/lib/types";
+
+function findNextUpcomingItem(
+  items: PlanItem[],
+  itemStatuses: Record<string, string>
+): PlanItem | null {
+  const now = Date.now();
+  const upcoming = items
+    .filter(
+      (item) =>
+        itemStatuses[item.id] !== "done" &&
+        new Date(item.start_time).getTime() >= now
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    );
+  return upcoming[0] ?? null;
+}
 
 export default function HomePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const nextItem = nextUpcomingItem(MOCK_PLAN);
+  const buckets = useTasksStore((s) => s.buckets);
+  const itemStatuses = useTasksStore((s) => s.itemStatuses);
+  const markDone = useTasksStore((s) => s.markDone);
 
-  const todayBucket = MOCK_PLAN.buckets.find((b) => b.label === "today");
+  const todayBucket = buckets.find((b) => b.label === "today");
   const todayCount = todayBucket?.items.length ?? 0;
-  const allItems = MOCK_PLAN.buckets.flatMap((b) => b.items);
-  const doneCount = allItems.filter(
-    (i) => i.item_type === "existing_event" || i.is_locked
-  ).length;
+  const allItems = buckets.flatMap((b) => b.items);
+  const doneCount = allItems.filter((i) => itemStatuses[i.id] === "done").length;
+  const nextItem = findNextUpcomingItem(allItems, itemStatuses);
 
   const today = new Intl.DateTimeFormat("ar-EG", {
     weekday: "long",
@@ -56,7 +75,7 @@ export default function HomePage() {
     interimResults: true,
     onResult: (text, isFinal) => {
       if (isFinal) {
-        toast({ title: `تم التسجيل: "${text}"`, description: "جاري التوجيه للشات..." });
+        toast({ title: `تم التسجيل: "${text}"`, description: "جاري فتح رتّب..." });
         setTimeout(() => router.push(`/chat?q=${encodeURIComponent(text)}`), 800);
       }
     },
@@ -71,10 +90,14 @@ export default function HomePage() {
     }
   }
 
+  function markNextDone(item: PlanItem) {
+    markDone(item.id);
+    toast({ title: `تم إنجاز: ${item.title}`, variant: "success" });
+  }
+
   return (
     <AppShellMobile withBottomNav>
       <div className="flex flex-col gap-5 px-4 pb-8 pt-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CharacterAvatar who="siraj" state="happy" size={52} />
@@ -91,7 +114,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* Progress */}
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-[14px] font-semibold">تقدم اليوم</span>
@@ -103,7 +125,6 @@ export default function HomePage() {
           <DayProgressBar total={allItems.length} done={doneCount} />
         </Card>
 
-        {/* Next task */}
         {nextItem && (
           <Card className="border-primary-100 bg-primary-50/40 p-4">
             <div className="mb-2 flex items-center gap-2">
@@ -117,7 +138,7 @@ export default function HomePage() {
               {formatTimeRange(nextItem.start_time, nextItem.end_time)}
             </p>
             <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={() => toast({ title: "تم!", variant: "success" })}>
+              <Button size="sm" onClick={() => markNextDone(nextItem)}>
                 <ListChecks className="h-4 w-4" />
                 تم
               </Button>
@@ -132,7 +153,6 @@ export default function HomePage() {
           </Card>
         )}
 
-        {/* Stats grid */}
         <div className="grid grid-cols-3 gap-3">
           <Link href="/today">
             <Card className="flex flex-col items-center gap-1 p-4 text-center">
@@ -140,21 +160,20 @@ export default function HomePage() {
               <span className="text-[11px] text-muted-foreground">مهام اليوم</span>
             </Card>
           </Link>
-          <Link href="/calendar">
+          <Link href="/chat">
             <Card className="flex flex-col items-center gap-1 p-4 text-center">
-              <CalendarCheck className="h-6 w-6 text-primary-600" />
-              <span className="text-[11px] text-muted-foreground">التقويم</span>
+              <Sparkles className="h-6 w-6 text-primary-600" />
+              <span className="text-[11px] text-muted-foreground">رتّب</span>
             </Card>
           </Link>
-          <Link href="/plan/preview">
+          <Link href="/settings">
             <Card className="flex flex-col items-center gap-1 p-4 text-center">
-              <TrendingUp className="h-6 w-6 text-primary-600" />
-              <span className="text-[11px] text-muted-foreground">خطتي</span>
+              <Settings className="h-6 w-6 text-primary-600" />
+              <span className="text-[11px] text-muted-foreground">الإعدادات</span>
             </Card>
           </Link>
         </div>
 
-        {/* Voice input section */}
         <Card className="flex flex-col items-center gap-3 p-6">
           <CharacterAvatar who="siraj" state="encouraging" size={64} />
           <p className="text-center text-[15px] font-semibold">

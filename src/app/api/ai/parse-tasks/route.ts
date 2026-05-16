@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { TaskExtractionSchema } from "@/lib/gemini/schema";
+import { extractTasksWithGemini } from "@/lib/gemini/client";
+import { buildPlanFromText } from "@/lib/plan/build-plan";
+import type { TaskExtraction } from "@/lib/gemini/schema";
 
 const RequestSchema = z.object({
   text: z.string().min(1).max(4000),
@@ -23,58 +25,51 @@ export async function POST(req: Request) {
     );
   }
 
-  // MVP stub: deterministic mock that matches the example in the plan §7.
-  const mock = TaskExtractionSchema.parse({
-    language: "ar",
-    timezone: parsed.data.timezone ?? "Asia/Riyadh",
-    tasks: [
-      {
-        title: "إنهاء العرض التقديمي",
-        date_expression: "بكرة",
-        duration_minutes: 90,
-        priority: "high",
-        energy: "high",
-        flexibility: "deadline",
-        type: "deep_work",
-        confidence: 0.86,
-      },
-      {
-        title: "الجيم",
-        date_expression: "اليوم",
-        time_expression: "بعد الشغل",
-        duration_minutes: 60,
-        priority: "medium",
-        energy: "medium",
-        flexibility: "flexible",
-        confidence: 0.74,
-      },
-      {
-        title: "مكالمة العميل",
-        date_expression: "الخميس",
-        duration_minutes: 30,
-        priority: "high",
-        energy: "low",
-        flexibility: "fixed",
-        confidence: 0.9,
-      },
-    ],
-    fixed_events_mentioned: [
-      {
-        title: "اجتماع",
-        date_expression: "اليوم",
-        time_expression: "2",
-        duration_minutes: 60,
-        confidence: 0.82,
-      },
-    ],
-    ambiguities: [
-      {
-        text: "بعد الشغل",
-        question: "ما وقت انتهاء العمل الافتراضي؟",
-        fallback: "18:00",
-      },
-    ],
+  const timezone = parsed.data.timezone ?? "Africa/Cairo";
+  const geminiExtraction = await extractTasksWithGemini({
+    text: parsed.data.text,
+    timezone,
+  });
+  const planningText = geminiExtraction
+    ? renderExtractionAsText(geminiExtraction)
+    : parsed.data.text;
+  const result = buildPlanFromText(planningText, {
+    timezone: parsed.data.timezone,
   });
 
-  return NextResponse.json(mock);
+  return NextResponse.json({
+    ...(geminiExtraction ?? result.extraction),
+    plan: {
+      ...result.plan,
+      input_text: parsed.data.text,
+      ai_model: geminiExtraction ? "gemini-2.5-flash" : "local",
+    },
+  });
+}
+
+function renderExtractionAsText(extraction: TaskExtraction) {
+  const fixedEvents = extraction.fixed_events_mentioned.map((event) =>
+    [
+      "عندي",
+      event.title,
+      event.date_expression,
+      event.time_expression,
+      `${event.duration_minutes} دقيقة`,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const tasks = extraction.tasks.map((task) =>
+    [
+      task.title,
+      task.date_expression,
+      task.time_expression,
+      `${task.duration_minutes} دقيقة`,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const ambiguities = extraction.ambiguities.map((item) => item.text);
+
+  return [...fixedEvents, ...tasks, ...ambiguities].join("، ");
 }
