@@ -10,7 +10,7 @@ export function formatTimeRange(startISO: string, endISO: string) {
     hour: "numeric",
     minute: "2-digit",
   });
-  return `${fmt.format(new Date(startISO))} – ${fmt.format(new Date(endISO))}`;
+  return `${fmt.format(new Date(startISO))} - ${fmt.format(new Date(endISO))}`;
 }
 
 export function arabicWeekday(date: Date) {

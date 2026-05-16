@@ -42,12 +42,11 @@ export function MessageComposer({
     continuous: false,
     interimResults: true,
     onResult: (text, isFinal) => {
-      if (isFinal) {
-        setValue((prev) => {
-          const base = prev.trimEnd();
-          return base ? `${base} ${text}` : text;
-        });
-      }
+      if (!isFinal) return;
+      setValue((prev) => {
+        const base = prev.trimEnd();
+        return base ? `${base} ${text}` : text;
+      });
     },
   });
 
@@ -75,10 +74,11 @@ export function MessageComposer({
   function toggleVoice() {
     if (isListening) {
       stopListening();
-    } else {
-      resetTranscript();
-      startListening();
+      return;
     }
+
+    resetTranscript();
+    startListening();
   }
 
   return (
@@ -102,11 +102,12 @@ export function MessageComposer({
               : "border-border"
           )}
         >
-          {withVoice && voiceSupported && (
+          {withVoice && (
             <VoiceButton
               isListening={isListening}
               onStart={toggleVoice}
               onStop={toggleVoice}
+              isSupported={voiceSupported}
               size="sm"
             />
           )}
@@ -123,9 +124,7 @@ export function MessageComposer({
             }}
             rows={1}
             dir="auto"
-            placeholder={
-              isListening ? "يتحدث الآن..." : placeholder
-            }
+            placeholder={isListening ? "يتحدث الآن..." : placeholder}
             className="block max-h-40 min-h-[28px] flex-1 resize-none bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
           <button

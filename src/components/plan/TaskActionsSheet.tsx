@@ -1,14 +1,7 @@
 "use client";
 
 import * as React from "react";
-import {
-  Pencil,
-  Copy,
-  CalendarClock,
-  Archive,
-  Trash2,
-  Pin,
-} from "lucide-react";
+import { Archive, CalendarClock, Copy, Pencil, Pin, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import type { PlanItem } from "@/lib/types";
@@ -45,7 +38,7 @@ export function TaskActionsSheet({
           {onEdit && (
             <ActionButton
               icon={<Pencil className="h-4 w-4" />}
-              label="تعديل"
+              label="تعديل الوقت"
               onClick={() => {
                 onEdit(item);
                 onOpenChange(false);
@@ -60,7 +53,7 @@ export function TaskActionsSheet({
           {onPostpone && (
             <ActionButton
               icon={<CalendarClock className="h-4 w-4" />}
-              label="نقل ليوم آخر"
+              label="نقل للغد"
               onClick={() => {
                 onPostpone(item.id);
                 onOpenChange(false);

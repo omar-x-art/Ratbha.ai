@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LayoutGrid, Settings, Sparkles } from "lucide-react";
+import { CalendarDays, LayoutGrid, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -23,11 +23,6 @@ const NAV_ITEMS: NavItem[] = [
     matchExact: true,
   },
   {
-    href: "/calendar",
-    label: "التقويم",
-    icon: <CalendarDays className="h-5 w-5" />,
-  },
-  {
     href: "/chat",
     label: "رتّب",
     icon: <Sparkles className="h-5 w-5" />,
@@ -35,9 +30,9 @@ const NAV_ITEMS: NavItem[] = [
     prominent: true,
   },
   {
-    href: "/settings",
-    label: "الإعدادات",
-    icon: <Settings className="h-5 w-5" />,
+    href: "/calendar",
+    label: "التقويم",
+    icon: <CalendarDays className="h-5 w-5" />,
   },
 ];
 

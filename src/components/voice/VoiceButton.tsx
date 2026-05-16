@@ -25,6 +25,9 @@ const ICON_SIZE_MAP = {
   lg: "h-6 w-6",
 };
 
+const START_LABEL = "\u0633\u062c\u0651\u0644 \u0635\u0648\u062a\u0643";
+const STOP_LABEL = "\u0623\u0648\u0642\u0641 \u0627\u0644\u062a\u0633\u062c\u064a\u0644";
+
 export function VoiceButton({
   isListening,
   onStart,
@@ -38,7 +41,7 @@ export function VoiceButton({
       type="button"
       onClick={isListening ? onStop : onStart}
       disabled={!isSupported}
-      aria-label={isListening ? "أوقف التسجيل" : "سجّل صوتك"}
+      aria-label={isListening ? STOP_LABEL : START_LABEL}
       className={cn(
         "relative flex shrink-0 items-center justify-center rounded-full transition-all duration-200",
         SIZE_MAP[size],

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, Filter, Plus } from "lucide-react";
+import { Filter, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { useVoiceInput } from "@/lib/hooks/use-voice-input";
@@ -21,7 +21,7 @@ export function QuickFindBar({
   onChange,
   onFilter,
   onAdd,
-  placeholder = "ابحث سريع أو سجّل صوتك...",
+  placeholder = "ابحث في مهامك...",
   withVoice = true,
   className,
 }: QuickFindBarProps) {
@@ -37,12 +37,10 @@ export function QuickFindBar({
     continuous: false,
     interimResults: true,
     onResult: (text, isFinal) => {
+      onChange?.(text);
       if (isFinal) {
-        onChange?.(text);
         stopListening();
         resetTranscript();
-      } else {
-        onChange?.(text);
       }
     },
   });
@@ -51,10 +49,11 @@ export function QuickFindBar({
     if (isListening) {
       stopListening();
       resetTranscript();
-    } else {
-      onChange?.("");
-      startListening();
+      return;
     }
+
+    onChange?.("");
+    startListening();
   }
 
   return (
@@ -82,11 +81,12 @@ export function QuickFindBar({
           placeholder={isListening ? "يتحدث الآن..." : placeholder}
           className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
         />
-        {withVoice && voiceSupported && !isListening && (
+        {withVoice && !isListening && (
           <VoiceButton
             isListening={false}
             onStart={toggleVoice}
             onStop={toggleVoice}
+            isSupported={voiceSupported}
             size="sm"
           />
         )}

@@ -23,6 +23,7 @@ export function TopBar({
   className,
 }: TopBarProps) {
   const router = useRouter();
+
   return (
     <header
       className={cn(
@@ -38,7 +39,6 @@ export function TopBar({
             aria-label="رجوع"
             onClick={() => router.back()}
           >
-            {/* In RTL, "back" visually points right */}
             <ChevronRight className="h-5 w-5" />
           </Button>
         ) : (
@@ -54,7 +54,7 @@ export function TopBar({
           <Button
             variant="ghost"
             size="icon"
-            aria-label="إعدادات"
+            aria-label="الإعدادات"
             asChild
           >
             <Link href="/settings">

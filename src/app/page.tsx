@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
+  Check,
   ChevronLeft,
   Clock,
   ListChecks,
@@ -24,24 +25,25 @@ import { useVoiceInput } from "@/lib/hooks/use-voice-input";
 import { formatTimeRange } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
-import type { PlanItem } from "@/lib/types";
+import type { PillStatus, PlanItem } from "@/lib/types";
 
 function findNextUpcomingItem(
   items: PlanItem[],
-  itemStatuses: Record<string, string>
+  itemStatuses: Record<string, PillStatus>
 ): PlanItem | null {
   const now = Date.now();
-  const upcoming = items
-    .filter(
-      (item) =>
-        itemStatuses[item.id] !== "done" &&
-        new Date(item.start_time).getTime() >= now
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-    );
-  return upcoming[0] ?? null;
+  return (
+    [...items]
+      .filter(
+        (item) =>
+          itemStatuses[item.id] !== "done" &&
+          new Date(item.end_time).getTime() >= now
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      )[0] ?? null
+  );
 }
 
 export default function HomePage() {
@@ -78,10 +80,9 @@ export default function HomePage() {
     continuous: false,
     interimResults: true,
     onResult: (text, isFinal) => {
-      if (isFinal) {
-        toast({ title: `تم التسجيل: "${text}"`, description: "جاري فتح رتّب..." });
-        setTimeout(() => router.push(`/chat?q=${encodeURIComponent(text)}`), 800);
-      }
+      if (!isFinal) return;
+      toast({ title: `تم التسجيل: "${text}"`, description: "سراج يجهزها الآن..." });
+      setTimeout(() => router.push(`/chat?q=${encodeURIComponent(text)}`), 800);
     },
   });
 
@@ -89,9 +90,10 @@ export default function HomePage() {
     if (isListening) {
       stopListening();
       resetTranscript();
-    } else {
-      startListening();
+      return;
     }
+
+    startListening();
   }
 
   function markNextDone(item: PlanItem) {
@@ -101,27 +103,82 @@ export default function HomePage() {
 
   return (
     <AppShellMobile withBottomNav>
-      <div className="flex flex-col gap-5 px-4 pb-8 pt-6">
+      <div className="flex flex-col gap-4 px-4 pb-8 pt-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CharacterAvatar who="siraj" state="happy" size={52} />
             <div>
-              <h1 className="text-[22px] font-bold leading-tight">أهلًا بك</h1>
+              <h1 className="text-[22px] font-bold leading-tight">رتّبها</h1>
               <p className="text-[13px] text-muted-foreground">{today}</p>
             </div>
           </div>
           <Link
             href="/settings"
+            aria-label="الإعدادات"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground"
           >
             <Settings className="h-4 w-4" />
           </Link>
         </div>
 
-        <Card className="border-primary-100 bg-primary-50/35 p-4">
+        <Card className="border-primary-200 bg-primary-50/70 p-4 shadow-card">
+          {nextItem ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-center gap-2 text-primary-700">
+                    <Clock className="h-4 w-4" />
+                    <span className="text-[12px] font-bold">المهمة التالية</span>
+                  </div>
+                  <h2 className="text-[22px] font-bold leading-tight">
+                    {nextItem.title}
+                  </h2>
+                  <p className="mt-1 text-[14px] font-semibold text-primary-800">
+                    {formatTimeRange(nextItem.start_time, nextItem.end_time)}
+                  </p>
+                </div>
+                <Button
+                  size="icon"
+                  onClick={() => markNextDone(nextItem)}
+                  aria-label="إنجاز المهمة"
+                  className="shrink-0 rounded-full"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={() => router.push("/today")} className="justify-center">
+                  <ListChecks className="h-4 w-4" />
+                  افتح يومي
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/calendar")}
+                  className="justify-center"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  في التقويم
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-primary-600" />
+              <div>
+                <h2 className="text-[17px] font-bold">لا توجد مهمة قادمة الآن</h2>
+                <p className="text-[13px] text-muted-foreground">
+                  أضف مهمة بوقت محدد لتظهر هنا فوراً.
+                </p>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[14px] font-semibold">خطة اليوم</span>
+              <span className="text-[14px] font-semibold">تقدم اليوم</span>
               <span className="text-[12px] text-muted-foreground">
                 {doneCount} من {todayCount} منجزة
               </span>
@@ -134,45 +191,7 @@ export default function HomePage() {
               <ChevronLeft className="h-3 w-3" />
             </Link>
           </div>
-
           <DayProgressBar total={todayCount} done={doneCount} />
-
-          <div className="mt-4 border-t border-primary-100 pt-4">
-            {nextItem ? (
-              <>
-                <div className="mb-2 flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-primary-600" />
-                  <span className="text-[12px] font-semibold text-primary-700">
-                    المهمة التالية
-                  </span>
-                </div>
-                <h3 className="text-[18px] font-bold">{nextItem.title}</h3>
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  {formatTimeRange(nextItem.start_time, nextItem.end_time)}
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <Button size="sm" onClick={() => markNextDone(nextItem)}>
-                    <ListChecks className="h-4 w-4" />
-                    تم
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push("/today")}
-                  >
-                    عرض يومي
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 rounded-card bg-surface/70 p-3">
-                <Clock className="h-4 w-4 text-primary-600" />
-                <p className="text-[13px] font-semibold">
-                  لا توجد مهمة قادمة الآن
-                </p>
-              </div>
-            )}
-          </div>
         </Card>
 
         <div className="grid grid-cols-3 gap-3">
@@ -199,28 +218,24 @@ export default function HomePage() {
         <Card className="flex flex-col items-center gap-3 p-6">
           <CharacterAvatar who="siraj" state="encouraging" size={64} />
           <p className="text-center text-[15px] font-semibold">
-            قولي وش عندك وأرتّب لك
-          </p>
-          <p className="text-center text-[12px] text-muted-foreground">
-            اضغط الميكروفون أو اكتب مهامك
+            قل لسراج ماذا تريد أن ترتب
           </p>
           <VoiceTranscriptOverlay
             interimTranscript={interimTranscript}
             isListening={isListening}
           />
           <div className="flex items-center gap-3">
-            {voiceSupported && (
-              <VoiceButton
-                isListening={isListening}
-                onStart={toggleVoice}
-                onStop={toggleVoice}
-                size="lg"
-              />
-            )}
+            <VoiceButton
+              isListening={isListening}
+              onStart={toggleVoice}
+              onStop={toggleVoice}
+              isSupported={voiceSupported}
+              size="lg"
+            />
             <Button asChild size="lg">
-              <Link href="/chat">
+              <Link href="/today">
                 <Plus className="h-4 w-4" />
-                اكتب مهامك
+                أضف مهمة
               </Link>
             </Button>
           </div>

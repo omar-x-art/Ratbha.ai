@@ -4,8 +4,14 @@ import {
   persist,
   type StateStorage,
 } from "zustand/middleware";
-import type { PlanItem, DayBucket, Task, PillStatus, Plan } from "@/lib/types";
+import type { DayBucket, PillStatus, Plan, PlanItem, Task } from "@/lib/types";
 import { MOCK_PLAN } from "@/lib/mock/plans";
+
+interface AddQuickItemOptions {
+  date?: string;
+  time?: string;
+  durationMinutes?: number;
+}
 
 interface TasksStore {
   buckets: DayBucket[];
@@ -19,7 +25,7 @@ interface TasksStore {
   pinItem: (id: string) => void;
   markDone: (id: string) => void;
   setItemStatus: (id: string, status: PillStatus) => void;
-  addQuickItem: (title: string) => void;
+  addQuickItem: (title: string, options?: AddQuickItemOptions) => void;
   setPlan: (plan: Pick<Plan, "buckets" | "inbox">) => void;
   setInbox: (inbox: Task[]) => void;
   resolveInboxTask: (id: string) => void;
@@ -51,13 +57,87 @@ function toDateKey(date: Date) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-function createQuickItem(title: string): PlanItem {
+function isSameDate(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function getBucketMeta(date: Date): Pick<DayBucket, "date" | "label" | "arabicLabel"> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+
+  if (isSameDate(normalized, today)) {
+    return { date: toDateKey(date), label: "today", arabicLabel: "اليوم" };
+  }
+
+  if (isSameDate(normalized, tomorrow)) {
+    return { date: toDateKey(date), label: "tomorrow", arabicLabel: "غداً" };
+  }
+
+  return { date: toDateKey(date), label: "later", arabicLabel: "لاحقاً" };
+}
+
+function sortItems(items: PlanItem[]) {
+  return [...items].sort(
+    (a, b) =>
+      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+}
+
+function sortBuckets(buckets: DayBucket[]) {
+  return [...buckets].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+}
+
+function upsertItemInBucket(buckets: DayBucket[], item: PlanItem) {
+  const meta = getBucketMeta(new Date(item.start_time));
+  let found = false;
+
+  const nextBuckets = buckets.map((bucket) => {
+    const withoutItem = bucket.items.filter((it) => it.id !== item.id);
+    if (bucket.date !== meta.date) return { ...bucket, items: withoutItem };
+    found = true;
+    return { ...bucket, ...meta, items: sortItems([...withoutItem, item]) };
+  });
+
+  if (!found) {
+    nextBuckets.push({ ...meta, items: [item] });
+  }
+
+  return sortBuckets(nextBuckets).filter((bucket) => bucket.items.length > 0);
+}
+
+function buildStartDate(options?: AddQuickItemOptions) {
   const start = new Date();
   const roundedMinutes = Math.ceil(start.getMinutes() / 30) * 30;
   start.setMinutes(roundedMinutes, 0, 0);
   start.setTime(start.getTime() + 30 * 60 * 1000);
 
-  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  if (options?.date) {
+    const [year, month, day] = options.date.split("-").map(Number);
+    start.setFullYear(year, month - 1, day);
+  }
+
+  if (options?.time) {
+    const [hour, minute] = options.time.split(":").map(Number);
+    start.setHours(hour, minute, 0, 0);
+  }
+
+  return start;
+}
+
+function createQuickItem(title: string, options?: AddQuickItemOptions): PlanItem {
+  const start = buildStartDate(options);
+  const duration = Math.max(options?.durationMinutes ?? 30, 5);
+  const end = new Date(start.getTime() + duration * 60 * 1000);
 
   return {
     id: `quick-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -75,43 +155,45 @@ export const useTasksStore = create<TasksStore>()(
       ...initialState,
 
       updateItem: (id, patch) =>
-        set((s) => ({
-          buckets: s.buckets.map((b) => ({
-            ...b,
-            items: b.items.map((it) =>
-              it.id === id ? { ...it, ...patch } : it
-            ),
-          })),
-        })),
+        set((s) => {
+          const current = s.buckets
+            .flatMap((bucket) => bucket.items)
+            .find((item) => item.id === id);
+          if (!current) return s;
+          return { buckets: upsertItemInBucket(s.buckets, { ...current, ...patch }) };
+        }),
 
       removeItem: (id) =>
         set((s) => ({
-          buckets: s.buckets.map((b) => ({
-            ...b,
-            items: b.items.filter((it) => it.id !== id),
-          })),
+          buckets: s.buckets
+            .map((b) => ({
+              ...b,
+              items: b.items.filter((it) => it.id !== id),
+            }))
+            .filter((b) => b.items.length > 0),
         })),
 
       postponeItem: (id) =>
-        set((s) => ({
-          buckets: s.buckets.map((b) => ({
-            ...b,
-            items: b.items.map((it) =>
-              it.id === id
-                ? {
-                    ...it,
-                    start_time: new Date(
-                      new Date(it.start_time).getTime() + 24 * 60 * 60 * 1000
-                    ).toISOString(),
-                    end_time: new Date(
-                      new Date(it.end_time).getTime() + 24 * 60 * 60 * 1000
-                    ).toISOString(),
-                    reason: "أجّلتها للغد",
-                  }
-                : it
-            ),
-          })),
-        })),
+        set((s) => {
+          const current = s.buckets
+            .flatMap((bucket) => bucket.items)
+            .find((item) => item.id === id);
+          if (!current) return s;
+
+          const start = new Date(current.start_time);
+          const end = new Date(current.end_time);
+          start.setDate(start.getDate() + 1);
+          end.setDate(end.getDate() + 1);
+
+          return {
+            buckets: upsertItemInBucket(s.buckets, {
+              ...current,
+              start_time: start.toISOString(),
+              end_time: end.toISOString(),
+              reason: "أجلتها للغد",
+            }),
+          };
+        }),
 
       pinItem: (id) =>
         set((s) => ({
@@ -133,31 +215,10 @@ export const useTasksStore = create<TasksStore>()(
           itemStatuses: { ...s.itemStatuses, [id]: status },
         })),
 
-      addQuickItem: (title) =>
-        set((s) => {
-          const item = createQuickItem(title);
-          const hasTodayBucket = s.buckets.some((b) => b.label === "today");
-
-          if (!hasTodayBucket) {
-            return {
-              buckets: [
-                {
-                  date: toDateKey(new Date()),
-                  label: "today",
-                  arabicLabel: "اليوم",
-                  items: [item],
-                },
-                ...s.buckets,
-              ],
-            };
-          }
-
-          return {
-            buckets: s.buckets.map((b) =>
-              b.label === "today" ? { ...b, items: [...b.items, item] } : b
-            ),
-          };
-        }),
+      addQuickItem: (title, options) =>
+        set((s) => ({
+          buckets: upsertItemInBucket(s.buckets, createQuickItem(title, options)),
+        })),
 
       setPlan: (plan) =>
         set({

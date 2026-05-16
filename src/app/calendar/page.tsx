@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { StatusPill } from "@/components/plan/StatusPill";
-import { cn, arabicWeekday, formatTimeRange } from "@/lib/utils";
+import { arabicWeekday, cn, formatTimeRange } from "@/lib/utils";
 import { useTasksStore } from "@/lib/store/tasks-store";
 import type { DayBucket, PillStatus, PlanItem } from "@/lib/types";
 
@@ -35,7 +35,7 @@ const AR_MONTHS = [
 const HOURS = Array.from({ length: 17 }, (_, index) => index + 6);
 const DAY_START_HOUR = HOURS[0];
 const DAY_END_HOUR = HOURS[HOURS.length - 1] + 1;
-const HOUR_HEIGHT = 58;
+const HOUR_HEIGHT = 62;
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: "day", label: "يوم" },
   { id: "week", label: "أسبوع" },
@@ -44,10 +44,6 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
 
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
 }
 
 function isSameDay(d1: Date, d2: Date) {
@@ -70,15 +66,12 @@ function getWeekDays(date: Date): Date[] {
 }
 
 function buildMonthCells(year: number, month: number): CalendarCell[] {
-  const daysInMonth = getDaysInMonth(year, month);
   const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: CalendarCell[] = [];
 
   for (let i = firstDay; i > 0; i--) {
-    cells.push({
-      date: new Date(year, month, 1 - i),
-      inCurrentMonth: false,
-    });
+    cells.push({ date: new Date(year, month, 1 - i), inCurrentMonth: false });
   }
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -98,15 +91,12 @@ function buildMonthCells(year: number, month: number): CalendarCell[] {
 function buildEventMap(buckets: DayBucket[]): Map<string, PlanItem[]> {
   const map = new Map<string, PlanItem[]>();
 
-  for (const bucket of buckets) {
-    for (const item of bucket.items) {
-      const start = new Date(item.start_time);
-      const key = dateKey(start);
-      const arr = map.get(key) || [];
-      arr.push(item);
-      map.set(key, arr);
-    }
-  }
+  buckets.forEach((bucket) => {
+    bucket.items.forEach((item) => {
+      const key = dateKey(new Date(item.start_time));
+      map.set(key, [...(map.get(key) ?? []), item]);
+    });
+  });
 
   Array.from(map.values()).forEach((items) => {
     items.sort(
@@ -119,7 +109,7 @@ function buildEventMap(buckets: DayBucket[]): Map<string, PlanItem[]> {
 }
 
 function getEventsForDate(date: Date, eventMap: Map<string, PlanItem[]>) {
-  return eventMap.get(dateKey(date)) || [];
+  return eventMap.get(dateKey(date)) ?? [];
 }
 
 function addToDate(date: Date, view: ViewMode, amount: number) {
@@ -135,6 +125,11 @@ function formatClock(date: Date) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatHour(hour: number) {
+  const h = hour > 12 ? hour - 12 : hour;
+  return `${h} ${hour >= 12 ? "م" : "ص"}`;
 }
 
 function getHeaderTitle(view: ViewMode, selectedDate: Date) {
@@ -169,7 +164,7 @@ function getBlockStyle(item: PlanItem): React.CSSProperties {
   const visibleStart = Math.max(dayStart, Math.min(dayEnd, startMinutes));
   const visibleEnd = Math.max(visibleStart + 20, Math.min(dayEnd, endMinutes));
   const top = ((visibleStart - dayStart) / 60) * HOUR_HEIGHT + 4;
-  const height = Math.max(((visibleEnd - visibleStart) / 60) * HOUR_HEIGHT - 8, 36);
+  const height = Math.max(((visibleEnd - visibleStart) / 60) * HOUR_HEIGHT - 8, 40);
 
   return { top, height };
 }
@@ -221,7 +216,7 @@ export default function CalendarPage() {
                 onClick={() => setSelectedDate(new Date())}
                 className="mt-1 text-[12px] font-semibold text-primary-700"
               >
-                ارجع لليوم
+                اليوم
               </button>
             </div>
 
@@ -339,7 +334,7 @@ function MonthGrid({
               type="button"
               onClick={() => onSelect(cell.date)}
               className={cn(
-                "min-h-[74px] border-b border-s border-border/70 p-1.5 text-start transition-colors",
+                "min-h-[82px] border-b border-s border-border/70 p-1.5 text-start transition-colors",
                 !cell.inCurrentMonth && "bg-muted/20 text-muted-foreground/60",
                 isSelected && "bg-primary-50",
                 !isSelected && "hover:bg-muted/50"
@@ -364,7 +359,7 @@ function MonthGrid({
                       getEventClasses(item, getItemStatus(item, itemStatuses))
                     )}
                   >
-                    {item.title}
+                    {formatClock(new Date(item.start_time))} {item.title}
                   </span>
                 ))}
                 {events.length > 2 && (
@@ -401,7 +396,7 @@ function WeekTimeline({
     <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
       <div className="overflow-x-auto">
         <div className="min-w-[760px]">
-          <div className="grid grid-cols-[48px_repeat(7,minmax(96px,1fr))] border-b border-border bg-muted/40">
+          <div className="grid grid-cols-[52px_repeat(7,minmax(96px,1fr))] border-b border-border bg-muted/40">
             <div />
             {days.map((day) => {
               const isToday = isSameDay(day, today);
@@ -437,14 +432,13 @@ function WeekTimeline({
                 className="absolute inset-x-0 border-t border-border/60"
                 style={{ top: index * HOUR_HEIGHT }}
               >
-                <span className="absolute start-1 top-1 w-10 text-center text-[10px] text-muted-foreground">
-                  {hour > 12 ? hour - 12 : hour}
-                  {hour >= 12 ? "م" : "ص"}
+                <span className="absolute start-1 top-1 w-11 text-center text-[10px] text-muted-foreground">
+                  {formatHour(hour)}
                 </span>
               </div>
             ))}
 
-            <div className="absolute inset-y-0 start-12 end-0 grid grid-cols-7">
+            <div className="absolute inset-y-0 start-[52px] end-0 grid grid-cols-7">
               {days.map((day) => {
                 const events = getEventsForDate(day, eventMap);
                 return (
@@ -503,14 +497,13 @@ function DayTimeline({
             className="absolute inset-x-0 border-t border-border/60"
             style={{ top: index * HOUR_HEIGHT }}
           >
-            <span className="absolute start-1 top-1 w-10 text-center text-[10px] text-muted-foreground">
-              {hour > 12 ? hour - 12 : hour}
-              {hour >= 12 ? "م" : "ص"}
+            <span className="absolute start-1 top-1 w-11 text-center text-[10px] text-muted-foreground">
+              {formatHour(hour)}
             </span>
           </div>
         ))}
 
-        <div className="absolute inset-y-0 start-12 end-0 border-s border-border/70">
+        <div className="absolute inset-y-0 start-[52px] end-0 border-s border-border/70">
           {items.length === 0 ? (
             <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-muted-foreground">
               لا توجد مهام في هذا اليوم
@@ -555,11 +548,11 @@ function CalendarBlock({
       >
         {item.title}
       </p>
-      {!compact && (
-        <p className="mt-0.5 text-[11px] opacity-80">
-          {formatTimeRange(item.start_time, item.end_time)}
-        </p>
-      )}
+      <p className={cn("mt-0.5 opacity-80", compact ? "text-[9px]" : "text-[11px]")}>
+        {compact
+          ? formatClock(new Date(item.start_time))
+          : formatTimeRange(item.start_time, item.end_time)}
+      </p>
     </div>
   );
 }
@@ -593,9 +586,9 @@ function AgendaList({
           >
             <div className="min-w-0">
               <p className="truncate text-[14px] font-semibold">{item.title}</p>
-              <p className="text-[12px] text-muted-foreground">
-                {formatClock(new Date(item.start_time))} -{" "}
-                {formatClock(new Date(item.end_time))}
+              <p className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">
+                <CalendarClock className="h-3.5 w-3.5" />
+                {formatTimeRange(item.start_time, item.end_time)}
               </p>
             </div>
             <StatusPill status={getItemStatus(item, itemStatuses)} />
