@@ -33,12 +33,11 @@ export function VoiceButton({
   size = "md",
   className,
 }: VoiceButtonProps) {
-  if (!isSupported) return null;
-
   return (
     <button
       type="button"
       onClick={isListening ? onStop : onStart}
+      disabled={!isSupported}
       aria-label={isListening ? "أوقف التسجيل" : "سجّل صوتك"}
       className={cn(
         "relative flex shrink-0 items-center justify-center rounded-full transition-all duration-200",
@@ -46,6 +45,7 @@ export function VoiceButton({
         isListening
           ? "bg-danger text-white shadow-lg"
           : "bg-primary-50 text-primary-700 hover:bg-primary-100",
+        !isSupported && "cursor-not-allowed opacity-45",
         className
       )}
     >

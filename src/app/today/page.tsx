@@ -295,14 +295,13 @@ function SirajTodayComposer({
       />
 
       <div className="flex items-end gap-2 rounded-composer border border-border bg-surface px-3 py-2 shadow-card">
-        {isSupported && (
-          <VoiceButton
-            isListening={isListening}
-            onStart={toggleVoice}
-            onStop={toggleVoice}
-            size="sm"
-          />
-        )}
+        <VoiceButton
+          isListening={isListening}
+          onStart={toggleVoice}
+          onStop={toggleVoice}
+          isSupported={isSupported}
+          size="sm"
+        />
         <textarea
           ref={textareaRef}
           value={value}
