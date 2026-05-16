@@ -34,79 +34,186 @@ export function SwipeableTaskItem({
   className,
 }: SwipeableTaskItemProps) {
   const [offsetX, setOffsetX] = React.useState(0);
-  const startXRef = React.useRef(0);
-  const currentXRef = React.useRef(0);
-  const isDragging = React.useRef(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const startPointRef = React.useRef({ x: 0, y: 0 });
+  const originOffsetRef = React.useRef(0);
+  const offsetRef = React.useRef(0);
+  const intentRef = React.useRef<"idle" | "horizontal" | "vertical">("idle");
+  const pointerIdRef = React.useRef<number | null>(null);
+  const completionTimerRef = React.useRef<number | null>(null);
 
   const status = pillStatus ?? getPillStatus(item);
-  const THRESHOLD = 80;
+  const ACTION_THRESHOLD = 72;
+  const ACTION_REVEAL = 116;
+  const ACTION_LIMIT = 124;
+  const progress = Math.min(1, Math.abs(offsetX) / ACTION_THRESHOLD);
 
-  function handleTouchStart(e: React.TouchEvent) {
-    startXRef.current = e.touches[0].clientX;
-    currentXRef.current = offsetX;
-    isDragging.current = true;
+  React.useEffect(() => {
+    return () => {
+      if (completionTimerRef.current) window.clearTimeout(completionTimerRef.current);
+    };
+  }, []);
+
+  function setDragOffset(value: number) {
+    offsetRef.current = value;
+    setOffsetX(value);
   }
 
-  function handleTouchMove(e: React.TouchEvent) {
-    if (!isDragging.current) return;
-    const diff = e.touches[0].clientX - startXRef.current;
-    const newOffset = Math.max(-120, Math.min(120, currentXRef.current + diff));
-    setOffsetX(newOffset);
+  function limitOffset(value: number) {
+    const sign = Math.sign(value);
+    const abs = Math.abs(value);
+    if (abs <= ACTION_LIMIT) return value;
+    return sign * (ACTION_LIMIT + (abs - ACTION_LIMIT) * 0.18);
   }
 
-  function handleTouchEnd() {
-    isDragging.current = false;
-    if (offsetX > THRESHOLD) {
-      onDone?.(item);
-      setOffsetX(0);
-    } else if (offsetX < -THRESHOLD) {
-      onDelete?.(item);
-      setOffsetX(0);
-    } else {
-      setOffsetX(0);
+  function resetDrag() {
+    pointerIdRef.current = null;
+    intentRef.current = "idle";
+    setIsDragging(false);
+    setDragOffset(0);
+  }
+
+  function completeAction(action: "done" | "delete") {
+    setIsDragging(false);
+    setDragOffset(action === "done" ? ACTION_REVEAL : -ACTION_REVEAL);
+    completionTimerRef.current = window.setTimeout(() => {
+      resetDrag();
+      completionTimerRef.current = null;
+      if (action === "done") onDone?.(item);
+      if (action === "delete") onDelete?.(item);
+    }, 120);
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!event.isPrimary) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a")) return;
+
+    if (completionTimerRef.current) {
+      window.clearTimeout(completionTimerRef.current);
+      completionTimerRef.current = null;
+    }
+
+    pointerIdRef.current = event.pointerId;
+    intentRef.current = "idle";
+    startPointRef.current = { x: event.clientX, y: event.clientY };
+    originOffsetRef.current = offsetRef.current;
+    setIsDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current !== event.pointerId) return;
+
+    const dx = event.clientX - startPointRef.current.x;
+    const dy = event.clientY - startPointRef.current.y;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+
+    if (intentRef.current === "idle") {
+      if (absX < 8 && absY < 8) return;
+      intentRef.current = absX > absY * 1.15 ? "horizontal" : "vertical";
+    }
+
+    if (intentRef.current !== "horizontal") return;
+
+    event.preventDefault();
+    setDragOffset(limitOffset(originOffsetRef.current + dx));
+  }
+
+  function handlePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current !== event.pointerId) return;
+
+    if (intentRef.current === "horizontal") {
+      const finalOffset = offsetRef.current;
+      if (finalOffset > ACTION_THRESHOLD && onDone) {
+        completeAction("done");
+        return;
+      }
+      if (finalOffset < -ACTION_THRESHOLD && onDelete) {
+        completeAction("delete");
+        return;
+      }
+    }
+
+    resetDrag();
+  }
+
+  function handlePointerCancel(event: React.PointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current === event.pointerId) {
+      resetDrag();
     }
   }
 
-  const showDoneAction = offsetX > 20 && onDone;
-  const showDeleteAction = offsetX < -20 && onDelete;
+  function handlePointerLost(event: React.PointerEvent<HTMLDivElement>) {
+    if (pointerIdRef.current === event.pointerId && isDragging) {
+      resetDrag();
+    }
+  }
+
+  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (Math.abs(offsetRef.current) > 4) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  const showDoneAction = offsetX > 12 && onDone;
+  const showDeleteAction = offsetX < -12 && onDelete;
+  const actionBackground =
+    offsetX > 0 ? "bg-emerald-500/10" : offsetX < 0 ? "bg-danger/10" : "bg-muted/20";
 
   return (
     <div className={cn("relative overflow-hidden rounded-card", className)}>
-      {/* Background actions */}
-      <div className="absolute inset-0 flex items-center justify-between px-4">
+      <div
+        className={cn(
+          "absolute inset-0 transition-colors duration-150",
+          actionBackground
+        )}
+      />
+      <div className="absolute inset-0">
         <div
           className={cn(
-            "flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-white transition-opacity",
+            "absolute inset-y-0 left-4 flex items-center gap-1 text-emerald-700 transition-all duration-150",
             showDoneAction ? "opacity-100" : "opacity-0"
           )}
+          style={{ transform: `scale(${0.92 + progress * 0.08})` }}
         >
-          <Check className="h-4 w-4" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-card">
+            <Check className="h-4 w-4" />
+          </span>
           <span className="text-[12px] font-semibold">تم</span>
         </div>
         <div
           className={cn(
-            "flex items-center gap-1 rounded-full bg-danger px-3 py-1.5 text-white transition-opacity",
+            "absolute inset-y-0 right-4 flex items-center gap-1 text-danger transition-all duration-150",
             showDeleteAction ? "opacity-100" : "opacity-0"
           )}
+          style={{ transform: `scale(${0.92 + progress * 0.08})` }}
         >
-          <Trash2 className="h-4 w-4" />
           <span className="text-[12px] font-semibold">حذف</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-danger text-white shadow-card">
+            <Trash2 className="h-4 w-4" />
+          </span>
         </div>
       </div>
 
-      {/* Foreground card */}
       <div
         className={cn(
-          "relative flex items-start justify-between gap-3 border-b border-border bg-surface p-3 transition-shadow",
+          "relative flex touch-pan-y select-none items-start justify-between gap-3 border-b border-border bg-surface p-3 transition-[box-shadow,transform] will-change-transform",
           Math.abs(offsetX) > 10 && "shadow-lg"
         )}
         style={{
-          transform: `translateX(${-offsetX}px)`,
-          transition: isDragging.current ? "none" : "transform 200ms ease-out",
+          transform: `translate3d(${offsetX}px, 0, 0)`,
+          transitionDuration: isDragging ? "0ms" : "180ms",
+          transitionTimingFunction: "cubic-bezier(0.2, 0.8, 0.2, 1)",
         }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerCancel}
+        onLostPointerCapture={handlePointerLost}
+        onClickCapture={handleClick}
       >
         <div className="flex flex-1 flex-col gap-1.5">
           <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
   ChevronLeft,
   Clock,
   ListChecks,
@@ -51,10 +52,13 @@ export default function HomePage() {
   const markDone = useTasksStore((s) => s.markDone);
 
   const todayBucket = buckets.find((b) => b.label === "today");
-  const todayCount = todayBucket?.items.length ?? 0;
+  const todayItems = todayBucket?.items ?? [];
+  const todayCount = todayItems.length;
   const allItems = buckets.flatMap((b) => b.items);
-  const doneCount = allItems.filter((i) => itemStatuses[i.id] === "done").length;
-  const nextItem = findNextUpcomingItem(allItems, itemStatuses);
+  const doneCount = todayItems.filter((i) => itemStatuses[i.id] === "done").length;
+  const nextItem =
+    findNextUpcomingItem(todayItems, itemStatuses) ??
+    findNextUpcomingItem(allItems, itemStatuses);
 
   const today = new Intl.DateTimeFormat("ar-EG", {
     weekday: "long",
@@ -110,48 +114,66 @@ export default function HomePage() {
             href="/settings"
             className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground"
           >
-            <Sparkles className="h-4 w-4" />
+            <Settings className="h-4 w-4" />
           </Link>
         </div>
 
-        <Card className="p-4">
+        <Card className="border-primary-100 bg-primary-50/35 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-[14px] font-semibold">تقدم اليوم</span>
-            <Link href="/today" className="flex items-center gap-1 text-[12px] text-primary-700 hover:underline">
+            <div className="flex flex-col">
+              <span className="text-[14px] font-semibold">خطة اليوم</span>
+              <span className="text-[12px] text-muted-foreground">
+                {doneCount} من {todayCount} منجزة
+              </span>
+            </div>
+            <Link
+              href="/today"
+              className="flex items-center gap-1 text-[12px] text-primary-700 hover:underline"
+            >
               <span>عرض الكل</span>
               <ChevronLeft className="h-3 w-3" />
             </Link>
           </div>
-          <DayProgressBar total={allItems.length} done={doneCount} />
-        </Card>
 
-        {nextItem && (
-          <Card className="border-primary-100 bg-primary-50/40 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-primary-600" />
-              <span className="text-[12px] font-semibold text-primary-700">
-                المهمة التالية
-              </span>
-            </div>
-            <h3 className="text-[18px] font-bold">{nextItem.title}</h3>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              {formatTimeRange(nextItem.start_time, nextItem.end_time)}
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={() => markNextDone(nextItem)}>
-                <ListChecks className="h-4 w-4" />
-                تم
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/today")}
-              >
-                عرض يومي
-              </Button>
-            </div>
-          </Card>
-        )}
+          <DayProgressBar total={todayCount} done={doneCount} />
+
+          <div className="mt-4 border-t border-primary-100 pt-4">
+            {nextItem ? (
+              <>
+                <div className="mb-2 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary-600" />
+                  <span className="text-[12px] font-semibold text-primary-700">
+                    المهمة التالية
+                  </span>
+                </div>
+                <h3 className="text-[18px] font-bold">{nextItem.title}</h3>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  {formatTimeRange(nextItem.start_time, nextItem.end_time)}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" onClick={() => markNextDone(nextItem)}>
+                    <ListChecks className="h-4 w-4" />
+                    تم
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/today")}
+                  >
+                    عرض يومي
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 rounded-card bg-surface/70 p-3">
+                <Clock className="h-4 w-4 text-primary-600" />
+                <p className="text-[13px] font-semibold">
+                  لا توجد مهمة قادمة الآن
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
 
         <div className="grid grid-cols-3 gap-3">
           <Link href="/today">
@@ -160,16 +182,16 @@ export default function HomePage() {
               <span className="text-[11px] text-muted-foreground">مهام اليوم</span>
             </Card>
           </Link>
+          <Link href="/calendar">
+            <Card className="flex flex-col items-center gap-1 p-4 text-center">
+              <CalendarDays className="h-6 w-6 text-primary-600" />
+              <span className="text-[11px] text-muted-foreground">التقويم</span>
+            </Card>
+          </Link>
           <Link href="/chat">
             <Card className="flex flex-col items-center gap-1 p-4 text-center">
               <Sparkles className="h-6 w-6 text-primary-600" />
               <span className="text-[11px] text-muted-foreground">رتّب</span>
-            </Card>
-          </Link>
-          <Link href="/settings">
-            <Card className="flex flex-col items-center gap-1 p-4 text-center">
-              <Settings className="h-6 w-6 text-primary-600" />
-              <span className="text-[11px] text-muted-foreground">الإعدادات</span>
             </Card>
           </Link>
         </div>
