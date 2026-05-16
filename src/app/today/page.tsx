@@ -5,9 +5,7 @@ import { CalendarClock, Send } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
-import { QuickFindBar } from "@/components/shell/QuickFindBar";
 import { PullToRefresh } from "@/components/shell/PullToRefresh";
-import { CharacterAvatar } from "@/components/characters/CharacterAvatar";
 import { GroupHeader } from "@/components/plan/GroupHeader";
 import { SwipeableTaskItem } from "@/components/plan/SwipeableTaskItem";
 import { NextTaskWidget } from "@/components/plan/NextTaskWidget";
@@ -90,7 +88,7 @@ export default function TodayPage() {
   const setItemStatus = useTasksStore((s) => s.setItemStatus);
   const addQuickItem = useTasksStore((s) => s.addQuickItem);
 
-  const [search, setSearch] = React.useState("");
+  const [ready, setReady] = React.useState(false);
   const [draft, setDraft] = React.useState<QuickTaskDraft>(() => getEmptyDraft());
   const [loading, setLoading] = React.useState(false);
   const [editing, setEditing] = React.useState<PlanItem | null>(null);
@@ -126,6 +124,7 @@ export default function TodayPage() {
 
   React.useEffect(() => {
     setDraft((current) => (current.date && current.time ? current : getDefaultDraft()));
+    setReady(true);
   }, []);
 
   function getItemStatus(item: PlanItem): PillStatus {
@@ -190,15 +189,12 @@ export default function TodayPage() {
     color: "primary" | "warning" | "secondary",
     showAdd?: boolean
   ) {
-    const filtered = bucket.items.filter(
-      (i) => !search || i.title.includes(search)
-    );
-    if (filtered.length === 0 && !search) return null;
+    if (bucket.items.length === 0) return null;
     return (
       <GroupHeader
         key={bucket.date}
         label={bucket.arabicLabel}
-        count={filtered.length}
+        count={bucket.items.length}
         color={color}
         onAdd={
           showAdd
@@ -209,7 +205,7 @@ export default function TodayPage() {
             : undefined
         }
       >
-        {filtered.map((planItem) => (
+        {bucket.items.map((planItem) => (
           <SwipeableTaskItem
             key={planItem.id}
             item={planItem}
@@ -230,56 +226,55 @@ export default function TodayPage() {
 
       <PullToRefresh onRefresh={refresh}>
         <div className="flex flex-col gap-4 px-4 pb-8 pt-4">
-          <NextTaskWidget
-            item={nextItem}
-            onDone={() => {
-              if (nextItem) handleDone(nextItem);
-            }}
-            onPostpone={() => {
-              if (nextItem) handlePostpone(nextItem.id);
-            }}
-            onReorganize={() => {
-              if (nextItem) openEdit(nextItem);
-            }}
-          />
-
-          <DayProgressBar total={allItems.length} done={doneCount} />
-
-          <SirajTodayComposer
-            draft={draft}
-            onChange={setDraft}
-            onSend={handleQuickTaskSend}
-          />
-
-          <QuickFindBar
-            value={search}
-            onChange={setSearch}
-            onAdd={() =>
-              document
-                .getElementById("quick-task-title")
-                ?.focus({ preventScroll: false })
-            }
-          />
-
-          {loading ? (
+          {!ready ? (
             <>
               <SkeletonGroup count={2} />
               <SkeletonGroup count={1} />
             </>
           ) : (
             <>
-              {todayBucket && renderBucket(todayBucket, "primary", true)}
-              {tomorrowBucket && renderBucket(tomorrowBucket, "warning")}
-              {laterBuckets.map((b) => renderBucket(b, "secondary"))}
-              {allItems.length === 0 && !search && (
-                <Card className="border-primary-100 bg-primary-50/35 text-center">
-                  <p className="text-[15px] font-semibold">
-                    يومك جاهز للترتيب
-                  </p>
-                  <p className="mt-1 text-[13px] text-muted-foreground">
-                    أضف مهمة بوقتها، وستظهر فوراً في اليوم والتقويم.
-                  </p>
-                </Card>
+              <NextTaskWidget
+                item={nextItem}
+                onDone={() => {
+                  if (nextItem) handleDone(nextItem);
+                }}
+                onPostpone={() => {
+                  if (nextItem) handlePostpone(nextItem.id);
+                }}
+                onReorganize={() => {
+                  if (nextItem) openEdit(nextItem);
+                }}
+              />
+
+              <DayProgressBar total={allItems.length} done={doneCount} />
+
+              <SirajTodayComposer
+                draft={draft}
+                onChange={setDraft}
+                onSend={handleQuickTaskSend}
+              />
+
+              {loading ? (
+                <>
+                  <SkeletonGroup count={2} />
+                  <SkeletonGroup count={1} />
+                </>
+              ) : (
+                <>
+                  {todayBucket && renderBucket(todayBucket, "primary", true)}
+                  {tomorrowBucket && renderBucket(tomorrowBucket, "warning")}
+                  {laterBuckets.map((b) => renderBucket(b, "secondary"))}
+                  {allItems.length === 0 && (
+                    <Card className="border-primary-100 bg-primary-50/35 text-center">
+                      <p className="text-[15px] font-semibold">
+                        يومك جاهز للترتيب
+                      </p>
+                      <p className="mt-1 text-[13px] text-muted-foreground">
+                        أضف مهمة بوقتها، وستظهر فوراً في اليوم والتقويم.
+                      </p>
+                    </Card>
+                  )}
+                </>
               )}
             </>
           )}
@@ -380,17 +375,7 @@ function SirajTodayComposer({
   }
 
   return (
-    <Card className="flex flex-col gap-3 border-primary-100 bg-primary-50/35">
-      <div className="flex items-center gap-3">
-        <CharacterAvatar who="siraj" state="thinking" size={40} />
-        <div className="flex flex-col">
-          <span className="text-[15px] font-semibold">رتّب مع سراج</span>
-          <span className="text-[12px] text-muted-foreground">
-            اكتب المهمة وحدد وقتها من البداية
-          </span>
-        </div>
-      </div>
-
+    <Card className="flex flex-col gap-2.5 border-primary-100 bg-primary-50/35 p-3">
       <VoiceTranscriptOverlay
         interimTranscript={interimTranscript}
         isListening={isListening}
@@ -417,7 +402,7 @@ function SirajTodayComposer({
           }}
           rows={1}
           dir="auto"
-          placeholder="مثال: راجع العرض قبل الاجتماع"
+          placeholder="اكتب مهمة جديدة"
           className="block max-h-28 min-h-[28px] flex-1 resize-none bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
         <button
@@ -431,10 +416,10 @@ function SirajTodayComposer({
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_96px_88px] gap-2">
+      <div className="grid grid-cols-[1fr_88px_76px] gap-2">
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-[11px] font-semibold text-muted-foreground">
-            اليوم
+            تاريخ
           </span>
           <input
             type="date"

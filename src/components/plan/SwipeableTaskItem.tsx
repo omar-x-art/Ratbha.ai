@@ -228,11 +228,6 @@ export function SwipeableTaskItem({
           <span className="text-[13px] text-muted-foreground">
             {formatTimeRange(item.start_time, item.end_time)}
           </span>
-          {item.reason && (
-            <span className="text-[12px] text-muted-foreground/80">
-              {item.reason}
-            </span>
-          )}
         </div>
 
         {onActionsClick && (

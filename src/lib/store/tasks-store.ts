@@ -145,7 +145,6 @@ function createQuickItem(title: string, options?: AddQuickItemOptions): PlanItem
     start_time: start.toISOString(),
     end_time: end.toISOString(),
     item_type: "proposed_task",
-    reason: "أضيفت من سراج",
   };
 }
 
