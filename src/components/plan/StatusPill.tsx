@@ -1,8 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-
-export type PillStatus = "active" | "done" | "overdue" | "planned" | "inbox";
+import type { PillStatus } from "@/lib/types";
 
 interface StatusPillProps {
   status: PillStatus;

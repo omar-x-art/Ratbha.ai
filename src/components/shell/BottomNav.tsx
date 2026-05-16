@@ -3,13 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  MessageSquare,
-  CalendarDays,
-  LayoutGrid,
-  Settings,
-} from "lucide-react";
+import { LayoutGrid, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -17,30 +11,23 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   matchExact?: boolean;
+  activePrefixes?: string[];
+  prominent?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   {
-    href: "/",
-    label: "الرئيسية",
-    icon: <Home className="h-5 w-5" />,
-    matchExact: true,
-  },
-  {
     href: "/today",
-    label: "يومي",
+    label: "اليوم",
     icon: <LayoutGrid className="h-5 w-5" />,
+    matchExact: true,
   },
   {
     href: "/chat",
-    label: "شات",
-    icon: <MessageSquare className="h-5 w-5" />,
-    matchExact: true,
-  },
-  {
-    href: "/calendar",
-    label: "التقويم",
-    icon: <CalendarDays className="h-5 w-5" />,
+    label: "رتّب",
+    icon: <Sparkles className="h-5 w-5" />,
+    activePrefixes: ["/chat", "/plan"],
+    prominent: true,
   },
   {
     href: "/settings",
@@ -65,16 +52,20 @@ export function BottomNav({ className }: BottomNavProps) {
       )}
     >
       {NAV_ITEMS.map((item) => {
-        const isActive = item.matchExact
-          ? pathname === item.href
-          : pathname.startsWith(item.href);
+        const isActive = item.activePrefixes
+          ? item.activePrefixes.some(
+              (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+            )
+          : item.matchExact
+            ? pathname === item.href
+            : pathname.startsWith(item.href);
 
         return (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors",
+              "flex flex-1 flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors",
               isActive
                 ? "text-primary-600"
                 : "text-muted-foreground hover:text-foreground"
@@ -83,7 +74,9 @@ export function BottomNav({ className }: BottomNavProps) {
             <span
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-                isActive && "bg-primary-100"
+                item.prominent && "h-10 w-10 bg-primary-500 text-white shadow-card",
+                item.prominent && isActive && "bg-primary-600",
+                !item.prominent && isActive && "bg-primary-100"
               )}
             >
               {item.icon}

@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
+import { fetchCalendarEvents } from "@/lib/google/calendar";
 
-// MVP stub: returns a fixed busy set for the next 7 days.
 export async function GET() {
   const now = new Date();
-  const today14 = new Date(now);
-  today14.setHours(14, 0, 0, 0);
-  const today15 = new Date(now);
-  today15.setHours(15, 0, 0, 0);
+  const end = new Date(now);
+  end.setDate(now.getDate() + 7);
+  const result = await fetchCalendarEvents({ timeMin: now, timeMax: end });
 
-  return NextResponse.json({
-    events: [
-      {
-        id: "ev-1",
-        title: "اجتماع",
-        start: today14.toISOString(),
-        end: today15.toISOString(),
-        isMeeting: true,
-      },
-    ],
-  });
+  return NextResponse.json(result);
 }

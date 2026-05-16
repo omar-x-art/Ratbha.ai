@@ -21,7 +21,7 @@ export function CalendarPermissionCard({
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
             <Calendar className="h-7 w-7 text-primary-700" />
           </div>
-          <h2 className="text-[18px] font-semibold">اربط Google Calendar</h2>
+          <h2 className="text-[18px] font-semibold">اربط تقويم جوجل</h2>
           <p className="text-[14px] text-muted-foreground">
             نقرأ تقويمك لنعرف فراغاتك ونقترح خطة تناسب يومك.
           </p>
@@ -30,7 +30,7 @@ export function CalendarPermissionCard({
             <span>لن نحفظ أي حدث في تقويمك إلا بعد ضغطك على زر «احفظ».</span>
           </div>
           <Button onClick={onConnect} size="lg" className="w-full">
-            ربط Google Calendar
+            ربط تقويم جوجل
           </Button>
           <button
             type="button"

@@ -22,7 +22,7 @@ export function MessageComposer({
   placeholder = "مثال: عندي اجتماع 2 والجيم بكرة وأخلص التقرير الخميس",
   onSend,
   className,
-  showReassure = true,
+  showReassure = false,
   reassureText = "لن نحفظ أي شيء في تقويمك قبل مراجعتك.",
   initialValue = "",
   withVoice = true,
