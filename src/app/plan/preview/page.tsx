@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, RotateCw, Save } from "lucide-react";
+import { ArrowRight, Loader2, RotateCw, Save } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
@@ -20,6 +20,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
 import type { PillStatus, PlanItem } from "@/lib/types";
 
+interface CalendarSaveResponse {
+  saved: { id: string }[];
+  mode: "google" | "legacy" | "not_connected" | "error";
+  account?: { email: string };
+  error?: string;
+}
+
 export default function PlanPreviewPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -31,6 +38,7 @@ export default function PlanPreviewPage() {
   const postponeItem = useTasksStore((s) => s.postponeItem);
   const setItemStatus = useTasksStore((s) => s.setItemStatus);
 
+  const [saving, setSaving] = React.useState(false);
   const [actionsSheet, setActionsSheet] = React.useState<{
     open: boolean;
     item: PlanItem | null;
@@ -40,8 +48,7 @@ export default function PlanPreviewPage() {
     item: PlanItem | null;
   }>({ open: false, item: null });
 
-  const totalToday =
-    buckets.find((b) => b.label === "today")?.items.length ?? 0;
+  const totalToday = buckets.find((b) => b.label === "today")?.items.length ?? 0;
   const totalLater = buckets
     .filter((b) => b.label !== "today")
     .reduce((s, b) => s + b.items.length, 0);
@@ -52,13 +59,55 @@ export default function PlanPreviewPage() {
     return "planned";
   }
 
-  function saveToCalendar() {
-    toast({
-      title: "تم حفظ خطتك بنجاح",
-      description: "أضفنا الأحداث إلى تقويم جوجل (تجريبي).",
-      variant: "success",
-    });
-    setTimeout(() => router.push("/today"), 700);
+  async function saveToCalendar() {
+    const items = buckets
+      .flatMap((bucket) => bucket.items)
+      .filter((item) => item.item_type !== "existing_event");
+
+    if (items.length === 0) {
+      toast({ title: "لا توجد مهام جديدة للحفظ" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch("/api/calendar/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const result = (await response.json()) as CalendarSaveResponse;
+
+      if (result.mode === "not_connected") {
+        toast({
+          title: "اربط Google Calendar أولا",
+          description: "بعد الربط سنحفظ الخطة في حسابك الحقيقي.",
+          variant: "danger",
+        });
+        router.push("/connect-calendar");
+        return;
+      }
+
+      if (result.mode === "error" || !response.ok) {
+        toast({
+          title: "تعذر حفظ الخطة في التقويم",
+          description: result.error ?? "أعد الربط ثم جرب مرة أخرى.",
+          variant: "danger",
+        });
+        return;
+      }
+
+      toast({
+        title: "تم حفظ خطتك في Google Calendar",
+        description: result.account?.email
+          ? `أضفنا ${result.saved.length} حدث إلى ${result.account.email}.`
+          : `أضفنا ${result.saved.length} حدث إلى التقويم.`,
+        variant: "success",
+      });
+      setTimeout(() => router.push("/today"), 700);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handlePostpone() {
@@ -106,9 +155,7 @@ export default function PlanPreviewPage() {
               key={bucket.date}
               label={bucket.arabicLabel}
               count={bucket.items.length}
-              color={
-                idx === 0 ? "primary" : idx === 1 ? "warning" : "secondary"
-              }
+              color={idx === 0 ? "primary" : idx === 1 ? "warning" : "secondary"}
             >
               {bucket.items.map((item) => (
                 <TaskItem
@@ -123,11 +170,7 @@ export default function PlanPreviewPage() {
           ))}
 
           {inbox.length > 0 && (
-            <GroupHeader
-              label="تحتاج توضيح"
-              count={inbox.length}
-              color="danger"
-            >
+            <GroupHeader label="تحتاج توضيح" count={inbox.length} color="danger">
               {inbox.map((task) => (
                 <InboxCard
                   key={task.id}
@@ -151,8 +194,17 @@ export default function PlanPreviewPage() {
               </Link>
             </Button>
             <div className="grid grid-cols-2 gap-2">
-              <Button onClick={saveToCalendar} variant="soft" size="md">
-                <Save className="h-4 w-4" />
+              <Button
+                onClick={saveToCalendar}
+                variant="soft"
+                size="md"
+                disabled={saving}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
                 احفظ في التقويم
               </Button>
               <Button variant="outline" size="md">

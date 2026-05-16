@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { Breadcrumb } from "@/components/shell/Breadcrumb";
@@ -15,6 +15,13 @@ import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
 import type { PillStatus, PlanItem } from "@/lib/types";
+
+interface CalendarSaveResponse {
+  saved: { id: string }[];
+  mode: "google" | "legacy" | "not_connected" | "error";
+  account?: { email: string };
+  error?: string;
+}
 
 export default function PlanReviewPage() {
   const router = useRouter();
@@ -30,6 +37,7 @@ export default function PlanReviewPage() {
 
   const [editing, setEditing] = React.useState<PlanItem | null>(null);
   const [open, setOpen] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [actionsSheet, setActionsSheet] = React.useState<{
     open: boolean;
     item: PlanItem | null;
@@ -70,13 +78,55 @@ export default function PlanReviewPage() {
     setOpen(false);
   }
 
-  function saveToCalendar() {
-    toast({
-      title: "تم حفظ خطتك بنجاح",
-      description: "أضفنا الأحداث إلى تقويم جوجل (تجريبي).",
-      variant: "success",
-    });
-    setTimeout(() => router.push("/today"), 700);
+  async function saveToCalendar() {
+    const items = buckets
+      .flatMap((bucket) => bucket.items)
+      .filter((item) => item.item_type !== "existing_event");
+
+    if (items.length === 0) {
+      toast({ title: "لا توجد مهام جديدة للحفظ" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch("/api/calendar/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const result = (await response.json()) as CalendarSaveResponse;
+
+      if (result.mode === "not_connected") {
+        toast({
+          title: "اربط Google Calendar أولا",
+          description: "بعد الربط سنحفظ الخطة في حسابك الحقيقي.",
+          variant: "danger",
+        });
+        router.push("/connect-calendar");
+        return;
+      }
+
+      if (result.mode === "error" || !response.ok) {
+        toast({
+          title: "تعذر حفظ الخطة في التقويم",
+          description: result.error ?? "أعد الربط ثم جرب مرة أخرى.",
+          variant: "danger",
+        });
+        return;
+      }
+
+      toast({
+        title: "تم حفظ خطتك في Google Calendar",
+        description: result.account?.email
+          ? `أضفنا ${result.saved.length} حدث إلى ${result.account.email}.`
+          : `أضفنا ${result.saved.length} حدث إلى التقويم.`,
+        variant: "success",
+      });
+      setTimeout(() => router.push("/today"), 700);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleStatusPick(status: PillStatus) {
@@ -103,9 +153,7 @@ export default function PlanReviewPage() {
             key={bucket.date}
             label={bucket.arabicLabel}
             count={bucket.items.length}
-            color={
-              idx === 0 ? "primary" : idx === 1 ? "warning" : "secondary"
-            }
+            color={idx === 0 ? "primary" : idx === 1 ? "warning" : "secondary"}
           >
             {bucket.items.map((item) => (
               <TaskItem
@@ -127,8 +175,17 @@ export default function PlanReviewPage() {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-[480px] flex-col gap-2 border-t border-border bg-background/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur">
-        <Button onClick={saveToCalendar} size="lg" className="w-full">
-          <Save className="h-4 w-4" />
+        <Button
+          onClick={saveToCalendar}
+          size="lg"
+          className="w-full"
+          disabled={saving}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           احفظ في التقويم
         </Button>
       </div>

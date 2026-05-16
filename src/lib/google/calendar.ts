@@ -1,4 +1,10 @@
 import type { PlanItem } from "@/lib/types";
+import type {
+  GoogleCalendarAccount,
+  PublicGoogleCalendarAccount,
+} from "@/lib/google/calendar-session";
+import { toPublicGoogleAccounts } from "@/lib/google/calendar-session";
+import { refreshGoogleAccessToken } from "@/lib/google/oauth";
 
 export interface CalendarBusyEvent {
   id: string;
@@ -6,7 +12,19 @@ export interface CalendarBusyEvent {
   start: string;
   end: string;
   isMeeting: boolean;
+  isAllDay: boolean;
+  accountId: string;
+  accountEmail: string;
+  accountName?: string;
 }
+
+export interface CalendarFetchError {
+  accountId: string;
+  email: string;
+  message: string;
+}
+
+export type CalendarApiMode = "google" | "legacy" | "not_connected" | "error";
 
 interface GoogleEventDate {
   dateTime?: string;
@@ -37,18 +55,150 @@ const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 export async function fetchCalendarEvents({
   timeMin,
   timeMax,
+  accounts = [],
 }: {
   timeMin: Date;
   timeMax: Date;
-}): Promise<{ events: CalendarBusyEvent[]; mode: "google" | "mock" }> {
-  const token = process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
-  if (!token) return { events: createMockEvents(), mode: "mock" };
+  accounts?: GoogleCalendarAccount[];
+}): Promise<{
+  events: CalendarBusyEvent[];
+  mode: CalendarApiMode;
+  accounts: PublicGoogleCalendarAccount[];
+  errors: CalendarFetchError[];
+}> {
+  if (accounts.length === 0) {
+    const legacyToken = process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
+    if (!legacyToken) {
+      return {
+        events: [],
+        mode: "not_connected",
+        accounts: [],
+        errors: [],
+      };
+    }
 
+    const legacyAccount = {
+      id: "legacy",
+      email: "الحساب الافتراضي",
+      connectedAt: new Date().toISOString(),
+    };
+
+    try {
+      return {
+        events: await fetchEventsWithAccessToken({
+          token: legacyToken,
+          account: legacyAccount,
+          timeMin,
+          timeMax,
+        }),
+        mode: "legacy",
+        accounts: [legacyAccount],
+        errors: [],
+      };
+    } catch (error) {
+      return {
+        events: [],
+        mode: "error",
+        accounts: [legacyAccount],
+        errors: [
+          {
+            accountId: legacyAccount.id,
+            email: legacyAccount.email,
+            message: getErrorMessage(error),
+          },
+        ],
+      };
+    }
+  }
+
+  const results = await Promise.all(
+    accounts.map(async (account) => {
+      try {
+        const token = await refreshGoogleAccessToken(account.refreshToken);
+        const events = await fetchEventsWithAccessToken({
+          token,
+          account,
+          timeMin,
+          timeMax,
+        });
+        return { account, events, error: null as string | null };
+      } catch (error) {
+        return { account, events: [], error: getErrorMessage(error) };
+      }
+    })
+  );
+
+  const events = results.flatMap((result) => result.events);
+  const errors = results.flatMap<CalendarFetchError>((result) =>
+    result.error
+      ? [
+          {
+            accountId: result.account.id,
+            email: result.account.email,
+            message: result.error,
+          },
+        ]
+      : []
+  );
+
+  return {
+    events: events.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()),
+    mode: errors.length === accounts.length ? "error" : "google",
+    accounts: toPublicGoogleAccounts(accounts),
+    errors,
+  };
+}
+
+export async function saveCalendarEvents(
+  items: Pick<PlanItem, "id" | "title" | "start_time" | "end_time">[],
+  options: { accounts?: GoogleCalendarAccount[]; accountId?: string } = {}
+): Promise<{
+  saved: SavedCalendarEvent[];
+  mode: CalendarApiMode;
+  account?: PublicGoogleCalendarAccount;
+  error?: string;
+}> {
+  const account =
+    options.accounts?.find((item) => item.id === options.accountId) ??
+    options.accounts?.[0];
+
+  if (!account) {
+    const legacyToken = process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
+    if (!legacyToken) return { saved: [], mode: "not_connected" };
+    return saveCalendarEventsWithToken(items, legacyToken, "legacy");
+  }
+
+  try {
+    const token = await refreshGoogleAccessToken(account.refreshToken);
+    const result = await saveCalendarEventsWithToken(items, token, "google");
+    return { ...result, account: accountToPublic(account) };
+  } catch (error) {
+    return {
+      saved: [],
+      mode: "error",
+      account: accountToPublic(account),
+      error: getErrorMessage(error),
+    };
+  }
+}
+
+async function fetchEventsWithAccessToken({
+  token,
+  account,
+  timeMin,
+  timeMax,
+}: {
+  token: string;
+  account: Pick<GoogleCalendarAccount, "id" | "email" | "name">;
+  timeMin: Date;
+  timeMax: Date;
+}) {
   const params = new URLSearchParams({
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
     singleEvents: "true",
     orderBy: "startTime",
+    maxResults: "2500",
   });
 
   const response = await fetch(
@@ -58,21 +208,17 @@ export async function fetchCalendarEvents({
     }
   );
 
-  if (!response.ok) return { events: createMockEvents(), mode: "mock" };
+  if (!response.ok) throw new Error(`calendar_events_${response.status}`);
 
   const data = (await response.json()) as GoogleEventsResponse;
-  return {
-    events: (data.items ?? []).flatMap(mapGoogleEvent),
-    mode: "google",
-  };
+  return (data.items ?? []).flatMap((event) => mapGoogleEvent(event, account));
 }
 
-export async function saveCalendarEvents(
-  items: Pick<PlanItem, "id" | "title" | "start_time" | "end_time">[]
-): Promise<{ saved: SavedCalendarEvent[]; mode: "google" | "mock" }> {
-  const token = process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
-  if (!token) return { saved: createMockSavedEvents(items), mode: "mock" };
-
+async function saveCalendarEventsWithToken(
+  items: Pick<PlanItem, "id" | "title" | "start_time" | "end_time">[],
+  token: string,
+  mode: "google" | "legacy"
+) {
   const saved: SavedCalendarEvent[] = [];
 
   for (const item of items) {
@@ -84,12 +230,13 @@ export async function saveCalendarEvents(
       },
       body: JSON.stringify({
         summary: item.title,
+        description: "أضيف بواسطة رتّبها AI",
         start: { dateTime: item.start_time },
         end: { dateTime: item.end_time },
       }),
     });
 
-    if (!response.ok) return { saved: createMockSavedEvents(items), mode: "mock" };
+    if (!response.ok) throw new Error(`calendar_save_${response.status}`);
 
     const event = (await response.json()) as GoogleCalendarEvent;
     saved.push({
@@ -98,50 +245,55 @@ export async function saveCalendarEvents(
     });
   }
 
-  return { saved, mode: "google" };
+  return { saved, mode };
 }
 
-function mapGoogleEvent(event: GoogleCalendarEvent): CalendarBusyEvent[] {
-  const start = event.start?.dateTime ?? event.start?.date;
-  const end = event.end?.dateTime ?? event.end?.date;
+function mapGoogleEvent(
+  event: GoogleCalendarEvent,
+  account: Pick<GoogleCalendarAccount, "id" | "email" | "name">
+): CalendarBusyEvent[] {
+  const start = normalizeGoogleDate(event.start);
+  const end = normalizeGoogleDate(event.end);
   if (!start || !end) return [];
 
   const title = event.summary ?? "حدث في التقويم";
 
   return [
     {
-      id: event.id ?? `event-${start}`,
+      id: `${account.id}:${event.id ?? start.value}`,
       title,
-      start,
-      end,
+      start: start.value,
+      end: end.value,
       isMeeting: /(اجتماع|meeting|meet|call|مكالمة)/i.test(title),
+      isAllDay: start.isAllDay,
+      accountId: account.id,
+      accountEmail: account.email,
+      accountName: account.name,
     },
   ];
 }
 
-function createMockEvents(): CalendarBusyEvent[] {
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(14, 0, 0, 0);
-  const end = new Date(now);
-  end.setHours(15, 0, 0, 0);
+function normalizeGoogleDate(value?: GoogleEventDate) {
+  if (value?.dateTime) return { value: value.dateTime, isAllDay: false };
+  if (!value?.date) return null;
 
-  return [
-    {
-      id: "ev-1",
-      title: "اجتماع",
-      start: start.toISOString(),
-      end: end.toISOString(),
-      isMeeting: true,
-    },
-  ];
+  const [year, month, day] = value.date.split("-").map(Number);
+  return {
+    value: new Date(year, month - 1, day, 0, 0, 0, 0).toISOString(),
+    isAllDay: true,
+  };
 }
 
-function createMockSavedEvents(
-  items: Pick<PlanItem, "id" | "title" | "start_time" | "end_time">[]
-): SavedCalendarEvent[] {
-  return items.map((item) => ({
-    ...item,
-    google_event_id: `gcal_mock_${item.id}_${Date.now()}`,
-  }));
+function accountToPublic(account: GoogleCalendarAccount): PublicGoogleCalendarAccount {
+  return {
+    id: account.id,
+    email: account.email,
+    name: account.name,
+    picture: account.picture,
+    connectedAt: account.connectedAt,
+  };
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "google_calendar_error";
 }

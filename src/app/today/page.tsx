@@ -53,6 +53,15 @@ function getDefaultDraft(): QuickTaskDraft {
   };
 }
 
+function getEmptyDraft(): QuickTaskDraft {
+  return {
+    title: "",
+    date: "",
+    time: "",
+    durationMinutes: 30,
+  };
+}
+
 function getUpcomingItem(items: PlanItem[], itemStatuses: Record<string, PillStatus>) {
   const now = Date.now();
   return (
@@ -82,7 +91,7 @@ export default function TodayPage() {
   const addQuickItem = useTasksStore((s) => s.addQuickItem);
 
   const [search, setSearch] = React.useState("");
-  const [draft, setDraft] = React.useState<QuickTaskDraft>(() => getDefaultDraft());
+  const [draft, setDraft] = React.useState<QuickTaskDraft>(() => getEmptyDraft());
   const [loading, setLoading] = React.useState(false);
   const [editing, setEditing] = React.useState<PlanItem | null>(null);
   const [editOpen, setEditOpen] = React.useState(false);
@@ -114,6 +123,10 @@ export default function TodayPage() {
   const laterBuckets = buckets.filter(
     (b) => b.label !== "today" && b.label !== "tomorrow"
   );
+
+  React.useEffect(() => {
+    setDraft((current) => (current.date && current.time ? current : getDefaultDraft()));
+  }, []);
 
   function getItemStatus(item: PlanItem): PillStatus {
     if (itemStatuses[item.id]) return itemStatuses[item.id];

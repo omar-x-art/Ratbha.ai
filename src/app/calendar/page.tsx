@@ -1,21 +1,70 @@
 "use client";
 
 import * as React from "react";
-import { CalendarClock, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import Link from "next/link";
+import {
+  AlertCircle,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  RefreshCw,
+} from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { StatusPill } from "@/components/plan/StatusPill";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { arabicWeekday, cn, formatTimeRange } from "@/lib/utils";
 import { useTasksStore } from "@/lib/store/tasks-store";
 import type { DayBucket, PillStatus, PlanItem } from "@/lib/types";
 
 type ViewMode = "day" | "week" | "month";
+type CalendarLoadState = "loading" | "ready" | "error";
 
 interface CalendarCell {
   date: Date;
   inCurrentMonth: boolean;
 }
+
+interface GoogleCalendarAccount {
+  id: string;
+  email: string;
+  name?: string;
+}
+
+interface CalendarBusyEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  isAllDay: boolean;
+  accountId: string;
+  accountEmail: string;
+  accountName?: string;
+}
+
+interface CalendarFetchError {
+  accountId: string;
+  email: string;
+  message: string;
+}
+
+interface CalendarEventsResponse {
+  configured: boolean;
+  mode: "google" | "legacy" | "not_connected" | "error";
+  accounts: GoogleCalendarAccount[];
+  events: CalendarBusyEvent[];
+  errors: CalendarFetchError[];
+}
+
+type DisplayCalendarItem = PlanItem & {
+  source: "ratbha" | "google";
+  accountEmail?: string;
+  accountName?: string;
+  isAllDay?: boolean;
+};
 
 const AR_DAYS = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
 const AR_MONTHS = [
@@ -88,13 +137,36 @@ function buildMonthCells(year: number, month: number): CalendarCell[] {
   return cells;
 }
 
-function buildEventMap(buckets: DayBucket[]): Map<string, PlanItem[]> {
-  const map = new Map<string, PlanItem[]>();
+function buildEventMap(
+  buckets: DayBucket[],
+  googleEvents: CalendarBusyEvent[]
+): Map<string, DisplayCalendarItem[]> {
+  const map = new Map<string, DisplayCalendarItem[]>();
 
   buckets.forEach((bucket) => {
     bucket.items.forEach((item) => {
-      const key = dateKey(new Date(item.start_time));
-      map.set(key, [...(map.get(key) ?? []), item]);
+      appendItem(map, {
+        ...item,
+        source: "ratbha",
+        isAllDay: false,
+      });
+    });
+  });
+
+  googleEvents.forEach((event) => {
+    appendItem(map, {
+      id: `google-${event.id}`,
+      title: event.title,
+      start_time: event.start,
+      end_time: event.end,
+      item_type: "existing_event",
+      google_event_id: event.id,
+      is_locked: true,
+      reason: event.accountEmail,
+      source: "google",
+      accountEmail: event.accountEmail,
+      accountName: event.accountName,
+      isAllDay: event.isAllDay,
     });
   });
 
@@ -108,7 +180,18 @@ function buildEventMap(buckets: DayBucket[]): Map<string, PlanItem[]> {
   return map;
 }
 
-function getEventsForDate(date: Date, eventMap: Map<string, PlanItem[]>) {
+function appendItem(
+  map: Map<string, DisplayCalendarItem[]>,
+  item: DisplayCalendarItem
+) {
+  const key = dateKey(new Date(item.start_time));
+  map.set(key, [...(map.get(key) ?? []), item]);
+}
+
+function getEventsForDate(
+  date: Date,
+  eventMap: Map<string, DisplayCalendarItem[]>
+) {
   return eventMap.get(dateKey(date)) ?? [];
 }
 
@@ -146,15 +229,16 @@ function getHeaderTitle(view: ViewMode, selectedDate: Date) {
 }
 
 function getItemStatus(
-  item: PlanItem,
+  item: DisplayCalendarItem,
   itemStatuses: Record<string, PillStatus>
 ): PillStatus {
+  if (item.source === "google") return "active";
   if (itemStatuses[item.id]) return itemStatuses[item.id];
   if (item.is_locked) return "active";
   return "planned";
 }
 
-function getBlockStyle(item: PlanItem): React.CSSProperties {
+function getBlockStyle(item: DisplayCalendarItem): React.CSSProperties {
   const start = new Date(item.start_time);
   const end = new Date(item.end_time);
   const dayStart = DAY_START_HOUR * 60;
@@ -169,7 +253,10 @@ function getBlockStyle(item: PlanItem): React.CSSProperties {
   return { top, height };
 }
 
-function getEventClasses(item: PlanItem, status: PillStatus) {
+function getEventClasses(item: DisplayCalendarItem, status: PillStatus) {
+  if (item.source === "google") {
+    return "border-sky-200 bg-sky-50 text-sky-900";
+  }
   if (status === "done") return "border-emerald-200 bg-emerald-50 text-emerald-800";
   if (status === "overdue") return "border-red-200 bg-red-50 text-red-800";
   if (item.is_locked || item.item_type === "existing_event") {
@@ -178,17 +265,133 @@ function getEventClasses(item: PlanItem, status: PillStatus) {
   return "border-secondary-200 bg-secondary-50 text-secondary-800";
 }
 
+function buildFetchWindow(view: ViewMode, selectedDate: Date) {
+  if (view === "month") {
+    const cells = buildMonthCells(selectedDate.getFullYear(), selectedDate.getMonth());
+    const start = new Date(cells[0].date);
+    const end = new Date(cells[cells.length - 1].date);
+    start.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + 1);
+    end.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+
+  if (view === "week") {
+    const days = getWeekDays(selectedDate);
+    const start = new Date(days[0]);
+    const end = new Date(days[days.length - 1]);
+    start.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + 1);
+    end.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+
+  const start = new Date(selectedDate);
+  const end = new Date(selectedDate);
+  start.setHours(0, 0, 0, 0);
+  end.setDate(end.getDate() + 1);
+  end.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
 export default function CalendarPage() {
   const [view, setView] = React.useState<ViewMode>("day");
-  const [selectedDate, setSelectedDate] = React.useState(new Date());
+  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [calendarState, setCalendarState] = React.useState<{
+    status: CalendarLoadState;
+    data: CalendarEventsResponse;
+  }>({
+    status: "loading",
+    data: {
+      configured: false,
+      mode: "not_connected",
+      accounts: [],
+      events: [],
+      errors: [],
+    },
+  });
   const buckets = useTasksStore((s) => s.buckets);
   const itemStatuses = useTasksStore((s) => s.itemStatuses);
-  const eventMap = React.useMemo(() => buildEventMap(buckets), [buckets]);
-  const weekDays = React.useMemo(() => getWeekDays(selectedDate), [selectedDate]);
-  const selectedEvents = getEventsForDate(selectedDate, eventMap);
+  const fetchWindow = React.useMemo(
+    () => (selectedDate ? buildFetchWindow(view, selectedDate) : null),
+    [view, selectedDate]
+  );
+
+  React.useEffect(() => {
+    setSelectedDate(new Date());
+  }, []);
+
+  React.useEffect(() => {
+    if (!fetchWindow) return;
+
+    const controller = new AbortController();
+    const activeWindow = fetchWindow;
+
+    async function loadCalendarEvents() {
+      setCalendarState((current) => ({ ...current, status: "loading" }));
+      try {
+        const params = new URLSearchParams({
+          timeMin: activeWindow.start.toISOString(),
+          timeMax: activeWindow.end.toISOString(),
+        });
+        const response = await fetch(`/api/calendar/events?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("calendar_fetch_failed");
+        const data = (await response.json()) as CalendarEventsResponse;
+        setCalendarState({ status: "ready", data });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setCalendarState((current) => ({
+          status: "error",
+          data: {
+            ...current.data,
+            errors: [
+              {
+                accountId: "app",
+                email: "رتّبها",
+                message: error instanceof Error ? error.message : "calendar_fetch_failed",
+              },
+            ],
+          },
+        }));
+      }
+    }
+
+    void loadCalendarEvents();
+
+    return () => controller.abort();
+  }, [fetchWindow, refreshKey]);
+
+  const eventMap = React.useMemo(
+    () => buildEventMap(buckets, calendarState.data.events),
+    [buckets, calendarState.data.events]
+  );
+  const weekDays = React.useMemo(
+    () => (selectedDate ? getWeekDays(selectedDate) : []),
+    [selectedDate]
+  );
+  const selectedEvents = selectedDate
+    ? getEventsForDate(selectedDate, eventMap)
+    : [];
 
   function move(amount: number) {
-    setSelectedDate((date) => addToDate(date, view, amount));
+    setSelectedDate((date) => addToDate(date ?? new Date(), view, amount));
+  }
+
+  if (!selectedDate) {
+    return (
+      <AppShellMobile withBottomNav>
+        <TopBar title="التقويم" showSettings />
+        <div className="flex flex-col gap-4 px-4 pb-8 pt-3">
+          <Card className="h-20 animate-pulse bg-muted/40" />
+          <Card className="h-[520px] animate-pulse bg-muted/40" />
+        </div>
+        <BottomNav />
+      </AppShellMobile>
+    );
   }
 
   return (
@@ -196,6 +399,11 @@ export default function CalendarPage() {
       <TopBar title="التقويم" showSettings />
 
       <div className="flex flex-col gap-4 px-4 pb-8 pt-3">
+        <CalendarSyncCard
+          state={calendarState}
+          onRefresh={() => setRefreshKey((key) => key + 1)}
+        />
+
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <button
@@ -291,6 +499,92 @@ export default function CalendarPage() {
   );
 }
 
+function CalendarSyncCard({
+  state,
+  onRefresh,
+}: {
+  state: { status: CalendarLoadState; data: CalendarEventsResponse };
+  onRefresh: () => void;
+}) {
+  const { status, data } = state;
+  const isLoading = status === "loading";
+  const connectedCount = data.accounts.length;
+
+  if (!data.configured) {
+    return (
+      <Card className="border-danger/20 bg-red-50/70">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-bold">Google Calendar غير مهيأ</p>
+            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+              أضف مفاتيح Google OAuth على السيرفر حتى تظهر أحداث حساباتك هنا.
+            </p>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/connect-calendar">الإعداد</Link>
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  if (data.mode === "not_connected") {
+    return (
+      <Card className="border-primary-100 bg-primary-50/35">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[14px] font-bold">اربط تقويمك الحقيقي</p>
+            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+              بعد الربط ستظهر أحداث Google بجانب مهام رتّبها.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link href="/connect-calendar">ربط</Link>
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[14px] font-bold">
+            {connectedCount > 1
+              ? `متصل بـ ${connectedCount} حسابات Google`
+              : "متصل بحساب Google"}
+          </p>
+          <p className="mt-1 truncate text-[12px] text-muted-foreground">
+            {data.accounts.map((account) => account.email).join("، ")}
+          </p>
+          {data.errors.length > 0 && (
+            <p className="mt-2 text-[12px] text-danger">
+              تعذر تحديث {data.errors.length} حساب. أعد الربط إذا استمرت المشكلة.
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="تحديث التقويم"
+            disabled={isLoading}
+            onClick={onRefresh}
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/connect-calendar">الحسابات</Link>
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function MonthGrid({
   year,
   month,
@@ -301,7 +595,7 @@ function MonthGrid({
 }: {
   year: number;
   month: number;
-  eventMap: Map<string, PlanItem[]>;
+  eventMap: Map<string, DisplayCalendarItem[]>;
   itemStatuses: Record<string, PillStatus>;
   selectedDate: Date;
   onSelect: (d: Date) => void;
@@ -359,7 +653,8 @@ function MonthGrid({
                       getEventClasses(item, getItemStatus(item, itemStatuses))
                     )}
                   >
-                    {formatClock(new Date(item.start_time))} {item.title}
+                    {item.isAllDay ? "طوال اليوم" : formatClock(new Date(item.start_time))}{" "}
+                    {item.title}
                   </span>
                 ))}
                 {events.length > 2 && (
@@ -384,7 +679,7 @@ function WeekTimeline({
   onSelect,
 }: {
   days: Date[];
-  eventMap: Map<string, PlanItem[]>;
+  eventMap: Map<string, DisplayCalendarItem[]>;
   itemStatuses: Record<string, PillStatus>;
   selectedDate: Date;
   onSelect: (d: Date) => void;
@@ -425,6 +720,8 @@ function WeekTimeline({
             })}
           </div>
 
+          <AllDayWeekRow days={days} eventMap={eventMap} itemStatuses={itemStatuses} />
+
           <div className="relative" style={{ height }}>
             {HOURS.map((hour, index) => (
               <div
@@ -440,7 +737,9 @@ function WeekTimeline({
 
             <div className="absolute inset-y-0 start-[52px] end-0 grid grid-cols-7">
               {days.map((day) => {
-                const events = getEventsForDate(day, eventMap);
+                const events = getEventsForDate(day, eventMap).filter(
+                  (item) => !item.isAllDay
+                );
                 return (
                   <div
                     key={day.toISOString()}
@@ -465,16 +764,62 @@ function WeekTimeline({
   );
 }
 
+function AllDayWeekRow({
+  days,
+  eventMap,
+  itemStatuses,
+}: {
+  days: Date[];
+  eventMap: Map<string, DisplayCalendarItem[]>;
+  itemStatuses: Record<string, PillStatus>;
+}) {
+  const hasAllDay = days.some((day) =>
+    getEventsForDate(day, eventMap).some((item) => item.isAllDay)
+  );
+
+  if (!hasAllDay) return null;
+
+  return (
+    <div className="grid grid-cols-[52px_repeat(7,minmax(96px,1fr))] border-b border-border bg-surface">
+      <div className="px-1 py-2 text-center text-[10px] text-muted-foreground">
+        طوال اليوم
+      </div>
+      {days.map((day) => {
+        const events = getEventsForDate(day, eventMap).filter((item) => item.isAllDay);
+        return (
+          <div key={day.toISOString()} className="border-s border-border/70 p-1">
+            <div className="flex flex-col gap-1">
+              {events.map((item) => (
+                <span
+                  key={item.id}
+                  className={cn(
+                    "truncate rounded-[6px] border px-1.5 py-1 text-[10px] font-semibold",
+                    getEventClasses(item, getItemStatus(item, itemStatuses))
+                  )}
+                >
+                  {item.title}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DayTimeline({
   date,
   items,
   itemStatuses,
 }: {
   date: Date;
-  items: PlanItem[];
+  items: DisplayCalendarItem[];
   itemStatuses: Record<string, PillStatus>;
 }) {
   const height = HOURS.length * HOUR_HEIGHT;
+  const allDayItems = items.filter((item) => item.isAllDay);
+  const timedItems = items.filter((item) => !item.isAllDay);
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
@@ -486,9 +831,28 @@ function DayTimeline({
           </span>
         </div>
         <span className="text-[12px] font-semibold text-muted-foreground">
-          {items.length} مهام
+          {items.length} حدث
         </span>
       </div>
+
+      {allDayItems.length > 0 && (
+        <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
+          <span className="text-[11px] font-semibold text-muted-foreground">
+            طوال اليوم
+          </span>
+          {allDayItems.map((item) => (
+            <div
+              key={item.id}
+              className={cn(
+                "rounded-[8px] border px-3 py-2 text-[13px] font-semibold",
+                getEventClasses(item, getItemStatus(item, itemStatuses))
+              )}
+            >
+              {item.title}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="relative" style={{ height }}>
         {HOURS.map((hour, index) => (
@@ -504,12 +868,12 @@ function DayTimeline({
         ))}
 
         <div className="absolute inset-y-0 start-[52px] end-0 border-s border-border/70">
-          {items.length === 0 ? (
+          {timedItems.length === 0 ? (
             <div className="flex h-full items-center justify-center px-6 text-center text-[13px] text-muted-foreground">
-              لا توجد مهام في هذا اليوم
+              لا توجد أحداث بوقت محدد في هذا اليوم
             </div>
           ) : (
-            items.map((item) => (
+            timedItems.map((item) => (
               <CalendarBlock
                 key={item.id}
                 item={item}
@@ -528,7 +892,7 @@ function CalendarBlock({
   status,
   compact,
 }: {
-  item: PlanItem;
+  item: DisplayCalendarItem;
   status: PillStatus;
   compact?: boolean;
 }) {
@@ -548,11 +912,16 @@ function CalendarBlock({
       >
         {item.title}
       </p>
-      <p className={cn("mt-0.5 opacity-80", compact ? "text-[9px]" : "text-[11px]")}>
+      <p className={cn("mt-0.5 truncate opacity-80", compact ? "text-[9px]" : "text-[11px]")}>
         {compact
           ? formatClock(new Date(item.start_time))
           : formatTimeRange(item.start_time, item.end_time)}
       </p>
+      {!compact && item.source === "google" && (
+        <p className="mt-0.5 truncate text-[10px] opacity-75">
+          {item.accountName ?? item.accountEmail}
+        </p>
+      )}
     </div>
   );
 }
@@ -563,20 +932,20 @@ function AgendaList({
   itemStatuses,
 }: {
   date: Date;
-  items: PlanItem[];
+  items: DisplayCalendarItem[];
   itemStatuses: Record<string, PillStatus>;
 }) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-[14px] font-semibold">
         {isSameDay(date, new Date())
-          ? "مهام اليوم"
+          ? "أحداث اليوم"
           : `${arabicWeekday(date)} ${date.getDate()} ${AR_MONTHS[date.getMonth()]}`}
       </h3>
 
       {items.length === 0 ? (
         <div className="rounded-card border border-dashed border-border bg-surface px-4 py-6 text-center text-[13px] text-muted-foreground">
-          لا توجد مهام في هذا اليوم
+          لا توجد أحداث في هذا اليوم
         </div>
       ) : (
         items.map((item) => (
@@ -588,8 +957,15 @@ function AgendaList({
               <p className="truncate text-[14px] font-semibold">{item.title}</p>
               <p className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">
                 <CalendarClock className="h-3.5 w-3.5" />
-                {formatTimeRange(item.start_time, item.end_time)}
+                {item.isAllDay
+                  ? "طوال اليوم"
+                  : formatTimeRange(item.start_time, item.end_time)}
               </p>
+              {item.source === "google" && (
+                <p className="mt-1 truncate text-[11px] text-sky-700">
+                  Google Calendar · {item.accountName ?? item.accountEmail}
+                </p>
+              )}
             </div>
             <StatusPill status={getItemStatus(item, itemStatuses)} />
           </div>

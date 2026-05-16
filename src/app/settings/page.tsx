@@ -1,13 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  Bell,
-  Calendar,
-  LogOut,
-  Trash2,
-  User,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, Calendar, LogOut, Trash2, User } from "lucide-react";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
@@ -20,6 +15,11 @@ interface RowProps {
   desc?: string;
   danger?: boolean;
   onClick?: () => void;
+}
+
+interface AccountsResponse {
+  configured: boolean;
+  accounts: { id: string; email: string }[];
 }
 
 function Row({ icon, title, desc, danger, onClick }: RowProps) {
@@ -57,17 +57,54 @@ function Row({ icon, title, desc, danger, onClick }: RowProps) {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const [calendarSummary, setCalendarSummary] = React.useState("جار فحص الربط");
+
+  React.useEffect(() => {
+    let active = true;
+
+    async function loadAccounts() {
+      try {
+        const response = await fetch("/api/google/accounts", { cache: "no-store" });
+        const data = (await response.json()) as AccountsResponse;
+        if (!active) return;
+        if (!data.configured) {
+          setCalendarSummary("Google Calendar غير مهيأ");
+          return;
+        }
+        setCalendarSummary(
+          data.accounts.length > 0
+            ? `متصل بـ ${data.accounts.length} حساب`
+            : "اربط حساب Google"
+        );
+      } catch {
+        if (active) setCalendarSummary("تعذر فحص الربط");
+      }
+    }
+
+    void loadAccounts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <AppShellMobile withBottomNav>
       <TopBar title="الإعدادات" showBack />
       <div className="flex flex-col gap-3 px-4 py-4">
         <Card className="p-2">
-          <Row icon={<User className="h-4 w-4" />} title="الحساب" desc="ربط حساب جوجل" />
+          <Row
+            icon={<User className="h-4 w-4" />}
+            title="الحساب"
+            desc="إعدادات الحساب الشخصي"
+          />
           <Separator />
           <Row
             icon={<Calendar className="h-4 w-4" />}
-            title="التقويم"
-            desc="تقويم جوجل"
+            title="Google Calendar"
+            desc={calendarSummary}
+            onClick={() => router.push("/connect-calendar")}
           />
           <Separator />
           <Row
@@ -78,10 +115,7 @@ export default function SettingsPage() {
         </Card>
 
         <Card className="p-2">
-          <Row
-            icon={<LogOut className="h-4 w-4" />}
-            title="تسجيل الخروج"
-          />
+          <Row icon={<LogOut className="h-4 w-4" />} title="تسجيل الخروج" />
           <Separator />
           <Row
             icon={<Trash2 className="h-4 w-4" />}

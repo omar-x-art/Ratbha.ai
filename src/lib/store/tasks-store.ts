@@ -241,6 +241,7 @@ export const useTasksStore = create<TasksStore>()(
     {
       name: "ratbha-tasks-store",
       storage: createJSONStorage(getTasksStorage),
+      skipHydration: true,
       partialize: (state) => ({
         buckets: state.buckets,
         inbox: state.inbox,

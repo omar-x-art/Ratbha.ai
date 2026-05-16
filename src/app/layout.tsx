@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans_Arabic } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { StoreHydrator } from "@/components/system/StoreHydrator";
 
 const arabic = IBM_Plex_Sans_Arabic({
   subsets: ["arabic", "latin"],
@@ -38,6 +39,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className={arabic.variable}>
       <body className="font-arabic">
+        <StoreHydrator />
         {children}
         <Toaster />
       </body>
