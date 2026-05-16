@@ -6,10 +6,16 @@ import { cn } from "@/lib/utils";
 interface DayProgressBarProps {
   total: number;
   done: number;
+  showCount?: boolean;
   className?: string;
 }
 
-export function DayProgressBar({ total, done, className }: DayProgressBarProps) {
+export function DayProgressBar({
+  total,
+  done,
+  showCount = true,
+  className,
+}: DayProgressBarProps) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
@@ -22,9 +28,11 @@ export function DayProgressBar({ total, done, className }: DayProgressBarProps) 
           />
         </div>
       </div>
-      <span className="text-[12px] font-semibold text-primary-700 tabular-nums">
-        {done}/{total}
-      </span>
+      {showCount && (
+        <span className="text-[12px] font-semibold text-primary-700 tabular-nums">
+          {done}/{total}
+        </span>
+      )}
     </div>
   );
 }

@@ -12,23 +12,23 @@ interface StatusPillProps {
 const STATUS_MAP: Record<PillStatus, { label: string; classes: string }> = {
   active: {
     label: "نشط",
-    classes: "bg-amber-100 text-amber-800 border-amber-200",
+    classes: "bg-amber-100 text-amber-900 border-amber-200",
   },
   done: {
     label: "منجز",
-    classes: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    classes: "bg-emerald-100 text-emerald-900 border-emerald-200",
   },
   overdue: {
     label: "متأخر",
-    classes: "bg-red-100 text-red-800 border-red-200",
+    classes: "bg-rose-100 text-rose-900 border-rose-200",
   },
   planned: {
-    label: "مُخطط",
-    classes: "bg-primary-100 text-primary-700 border-primary-200",
+    label: "مخطط",
+    classes: "bg-sky-100 text-sky-900 border-sky-200",
   },
   inbox: {
     label: "وارد",
-    classes: "bg-secondary-100 text-secondary-700 border-secondary-200",
+    classes: "bg-violet-100 text-violet-900 border-violet-200",
   },
 };
 
@@ -40,9 +40,9 @@ export function StatusPill({ status, onClick, className }: StatusPillProps) {
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center justify-center rounded-chip border px-2.5 py-0.5 text-[11px] font-semibold transition-colors",
+        "inline-flex h-6 min-w-[54px] items-center justify-center rounded-[7px] border px-2 text-[11px] font-bold transition-colors",
         classes,
-        onClick && "cursor-pointer hover:opacity-80",
+        onClick && "cursor-pointer hover:brightness-95",
         !onClick && "cursor-default",
         className
       )}

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, Clock, Pencil } from "lucide-react";
+import { Check, Clock, Pencil, CalendarPlus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatTimeRange } from "@/lib/utils";
@@ -22,53 +22,72 @@ export function NextTaskWidget({
 }: NextTaskWidgetProps) {
   if (!item) {
     return (
-      <Card className="p-3">
-        <div className="flex items-center gap-2.5">
-          <Clock className="h-4 w-4 shrink-0 text-primary-600" />
-          <p className="text-[14px] font-semibold">لا توجد مهمة قادمة</p>
+      <Card className="overflow-hidden border-dashed bg-surface p-0 shadow-none">
+        <div className="flex items-center gap-3 px-3 py-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-sky-50 text-sky-700">
+            <CalendarPlus className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[14px] font-bold">لا توجد مهمة قادمة</p>
+            <p className="text-[12px] text-muted-foreground">
+              أضف مهمة بوقت واضح لتظهر هنا.
+            </p>
+          </div>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className="border-primary-100 bg-primary-50/50 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <span className="text-[11px] font-bold text-primary-700">المهمة التالية</span>
-          <h2 className="mt-0.5 text-[18px] font-bold leading-tight">
-            {item.title}
-          </h2>
+    <Card className="relative overflow-hidden border-border bg-surface p-0 shadow-card">
+      <span className="absolute inset-y-3 start-0 w-1 rounded-e-full bg-sky-500" />
+      <div className="px-3 py-3 ps-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="rounded-[7px] bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-900">
+                التالية
+              </span>
+              <span className="flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                {formatTimeRange(item.start_time, item.end_time)}
+              </span>
+            </div>
+            <h2 className="line-clamp-2 text-[17px] font-bold leading-snug">
+              {item.title}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onDone}
+            aria-label="إنجاز المهمة"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card transition-colors hover:bg-emerald-600 disabled:opacity-50"
+            disabled={!onDone}
+          >
+            <Check className="h-4 w-4" />
+          </button>
         </div>
-        <span className="flex shrink-0 items-center gap-1 pt-0.5 text-[12px] font-semibold text-primary-800">
-          <Clock className="h-3.5 w-3.5" />
-          {formatTimeRange(item.start_time, item.end_time)}
-        </span>
-      </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-1.5">
-        <Button onClick={onDone} className="justify-center gap-1" size="sm">
-          <Check className="h-4 w-4" />
-          تم
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onPostpone}
-          className="justify-center gap-1"
-          size="sm"
-        >
-          <Clock className="h-4 w-4" />
-          للغد
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={onReorganize}
-          className="justify-center gap-1"
-          size="sm"
-        >
-          <Pencil className="h-4 w-4" />
-          تعديل
-        </Button>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button
+            variant="outline"
+            onClick={onPostpone}
+            className="h-8 justify-center rounded-[9px] text-[12px]"
+            size="sm"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            للغد
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={onReorganize}
+            className="h-8 justify-center rounded-[9px] text-[12px]"
+            size="sm"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            تعديل
+          </Button>
+        </div>
       </div>
     </Card>
   );

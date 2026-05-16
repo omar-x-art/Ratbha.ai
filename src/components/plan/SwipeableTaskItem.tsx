@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check, Trash2, MoreVertical } from "lucide-react";
+import { Check, Trash2, MoreVertical, Clock3 } from "lucide-react";
 import { cn, formatTimeRange } from "@/lib/utils";
 import { StatusPill } from "@/components/plan/StatusPill";
 import type { PillStatus, PlanItem } from "@/lib/types";
@@ -15,6 +15,14 @@ interface SwipeableTaskItemProps {
   onActionsClick?: (item: PlanItem) => void;
   className?: string;
 }
+
+const STATUS_MARKER: Record<PillStatus, string> = {
+  active: "bg-amber-400",
+  done: "bg-emerald-500",
+  overdue: "bg-rose-500",
+  planned: "bg-sky-500",
+  inbox: "bg-violet-500",
+};
 
 function getPillStatus(item: PlanItem): PillStatus {
   if (item.item_type === "existing_event" || item.is_locked) return "active";
@@ -43,9 +51,9 @@ export function SwipeableTaskItem({
   const completionTimerRef = React.useRef<number | null>(null);
 
   const status = pillStatus ?? getPillStatus(item);
-  const ACTION_THRESHOLD = 72;
-  const ACTION_REVEAL = 116;
-  const ACTION_LIMIT = 124;
+  const ACTION_THRESHOLD = 64;
+  const ACTION_REVEAL = 104;
+  const ACTION_LIMIT = 132;
   const progress = Math.min(1, Math.abs(offsetX) / ACTION_THRESHOLD);
 
   React.useEffect(() => {
@@ -63,7 +71,7 @@ export function SwipeableTaskItem({
     const sign = Math.sign(value);
     const abs = Math.abs(value);
     if (abs <= ACTION_LIMIT) return value;
-    return sign * (ACTION_LIMIT + (abs - ACTION_LIMIT) * 0.18);
+    return sign * (ACTION_LIMIT + (abs - ACTION_LIMIT) * 0.16);
   }
 
   function resetDrag() {
@@ -81,13 +89,13 @@ export function SwipeableTaskItem({
       completionTimerRef.current = null;
       if (action === "done") onDone?.(item);
       if (action === "delete") onDelete?.(item);
-    }, 120);
+    }, 130);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary) return;
     const target = event.target as HTMLElement;
-    if (target.closest("button,a")) return;
+    if (target.closest("button,a,input,textarea")) return;
 
     if (completionTimerRef.current) {
       window.clearTimeout(completionTimerRef.current);
@@ -111,8 +119,8 @@ export function SwipeableTaskItem({
     const absY = Math.abs(dy);
 
     if (intentRef.current === "idle") {
-      if (absX < 8 && absY < 8) return;
-      intentRef.current = absX > absY * 1.15 ? "horizontal" : "vertical";
+      if (absX < 7 && absY < 7) return;
+      intentRef.current = absX > absY * 1.18 ? "horizontal" : "vertical";
     }
 
     if (intentRef.current !== "horizontal") return;
@@ -161,17 +169,17 @@ export function SwipeableTaskItem({
   const showDoneAction = offsetX > 12 && onDone;
   const showDeleteAction = offsetX < -12 && onDelete;
   const actionBackground =
-    offsetX > 0 ? "bg-emerald-500/10" : offsetX < 0 ? "bg-danger/10" : "bg-muted/20";
+    offsetX > 0 ? "bg-emerald-500/10" : offsetX < 0 ? "bg-rose-500/10" : "bg-muted/20";
 
   return (
-    <div className={cn("relative overflow-hidden rounded-card", className)}>
+    <div className={cn("relative overflow-hidden rounded-[13px]", className)}>
       <div
         className={cn(
           "absolute inset-0 transition-colors duration-150",
           actionBackground
         )}
       />
-      <div className="absolute inset-0">
+      <div className="absolute inset-0" aria-hidden="true">
         <div
           className={cn(
             "absolute inset-y-0 left-4 flex items-center gap-1 text-emerald-700 transition-all duration-150",
@@ -179,20 +187,20 @@ export function SwipeableTaskItem({
           )}
           style={{ transform: `scale(${0.92 + progress * 0.08})` }}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card">
             <Check className="h-4 w-4" />
           </span>
-          <span className="text-[12px] font-semibold">تم</span>
+          <span className="text-[12px] font-bold">تم</span>
         </div>
         <div
           className={cn(
-            "absolute inset-y-0 right-4 flex items-center gap-1 text-danger transition-all duration-150",
+            "absolute inset-y-0 right-4 flex items-center gap-1 text-rose-700 transition-all duration-150",
             showDeleteAction ? "opacity-100" : "opacity-0"
           )}
           style={{ transform: `scale(${0.92 + progress * 0.08})` }}
         >
-          <span className="text-[12px] font-semibold">حذف</span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-danger text-white shadow-card">
+          <span className="text-[12px] font-bold">حذف</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-rose-500 text-white shadow-card">
             <Trash2 className="h-4 w-4" />
           </span>
         </div>
@@ -200,13 +208,13 @@ export function SwipeableTaskItem({
 
       <div
         className={cn(
-          "relative flex touch-pan-y select-none items-start justify-between gap-3 border-b border-border bg-surface p-3 transition-[box-shadow,transform] will-change-transform",
+          "relative min-h-[70px] touch-pan-y select-none overflow-hidden rounded-[13px] border border-border bg-surface transition-[box-shadow,transform] will-change-transform",
           Math.abs(offsetX) > 10 && "shadow-lg"
         )}
         style={{
           transform: `translate3d(${offsetX}px, 0, 0)`,
-          transitionDuration: isDragging ? "0ms" : "180ms",
-          transitionTimingFunction: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+          transitionDuration: isDragging ? "0ms" : "210ms",
+          transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -215,31 +223,52 @@ export function SwipeableTaskItem({
         onLostPointerCapture={handlePointerLost}
         onClickCapture={handleClick}
       >
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <StatusPill
-              status={status}
-              onClick={onStatusClick ? () => onStatusClick(item) : undefined}
-            />
-            <span className="text-[15px] font-semibold leading-snug">
-              {item.title}
-            </span>
-          </div>
-          <span className="text-[13px] text-muted-foreground">
-            {formatTimeRange(item.start_time, item.end_time)}
-          </span>
-        </div>
-
-        {onActionsClick && (
+        <span className={cn("absolute inset-y-3 start-0 w-1 rounded-e-full", STATUS_MARKER[status])} />
+        <div className="flex items-start gap-3 px-3 py-2.5 ps-4">
           <button
             type="button"
-            onClick={() => onActionsClick(item)}
-            aria-label="إجراءات"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => onDone?.(item)}
+            aria-label="إنجاز المهمة"
+            className={cn(
+              "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] border transition-colors",
+              status === "done"
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-border bg-surface text-muted-foreground hover:border-emerald-300 hover:text-emerald-700"
+            )}
+            disabled={!onDone}
           >
-            <MoreVertical className="h-4 w-4" />
+            <Check className="h-3.5 w-3.5" />
           </button>
-        )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <span className="min-w-0 text-[15px] font-bold leading-snug">
+                {item.title}
+              </span>
+              {onActionsClick && (
+                <button
+                  type="button"
+                  onClick={() => onActionsClick(item)}
+                  aria-label="إجراءات"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
+                <Clock3 className="h-3.5 w-3.5" />
+                {formatTimeRange(item.start_time, item.end_time)}
+              </span>
+              <StatusPill
+                status={status}
+                onClick={onStatusClick ? () => onStatusClick(item) : undefined}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

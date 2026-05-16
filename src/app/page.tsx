@@ -7,8 +7,8 @@ import {
   CalendarDays,
   Check,
   ChevronLeft,
-  Clock,
-  ListChecks,
+  Clock3,
+  LayoutGrid,
   Plus,
   Settings,
   Sparkles,
@@ -18,6 +18,7 @@ import { BottomNav } from "@/components/shell/BottomNav";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CharacterAvatar } from "@/components/characters/CharacterAvatar";
+import { MetricsStrip } from "@/components/insights/MetricsStrip";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
 import { DayProgressBar } from "@/components/plan/DayProgressBar";
@@ -46,6 +47,19 @@ function findNextUpcomingItem(
   );
 }
 
+function getItemMinutes(item: PlanItem) {
+  const start = new Date(item.start_time).getTime();
+  const end = new Date(item.end_time).getTime();
+  return Math.max(0, Math.round((end - start) / 60000));
+}
+
+function formatMinutes(minutes: number) {
+  if (minutes < 60) return `${minutes}د`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours}س ${rest}د` : `${hours}س`;
+}
+
 export default function HomePage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -58,6 +72,15 @@ export default function HomePage() {
   const todayCount = todayItems.length;
   const allItems = buckets.flatMap((b) => b.items);
   const doneCount = todayItems.filter((i) => itemStatuses[i.id] === "done").length;
+  const remainingCount = Math.max(0, todayCount - doneCount);
+  const scheduledMinutes = todayItems.reduce(
+    (total, item) => total + getItemMinutes(item),
+    0
+  );
+  const progressMetrics = [
+    { label: "متبقي", value: `${remainingCount}`, tone: "amber" as const },
+    { label: "مهام اليوم", value: `${todayCount}`, tone: "sky" as const },
+  ];
   const nextItem =
     findNextUpcomingItem(todayItems, itemStatuses) ??
     findNextUpcomingItem(allItems, itemStatuses);
@@ -81,7 +104,7 @@ export default function HomePage() {
     interimResults: true,
     onResult: (text, isFinal) => {
       if (!isFinal) return;
-      toast({ title: `تم التسجيل: "${text}"`, description: "سراج يجهزها الآن..." });
+      toast({ title: `تم التسجيل: "${text}"` });
       setTimeout(() => router.push(`/chat?q=${encodeURIComponent(text)}`), 800);
     },
   });
@@ -103,146 +126,174 @@ export default function HomePage() {
 
   return (
     <AppShellMobile withBottomNav>
-      <div className="flex flex-col gap-4 px-4 pb-8 pt-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CharacterAvatar who="siraj" state="happy" size={52} />
-            <div>
-              <h1 className="text-[22px] font-bold leading-tight">رتّبها</h1>
-              <p className="text-[13px] text-muted-foreground">{today}</p>
+      <div className="flex flex-col gap-3 px-3 pb-8 pt-4">
+        <div className="flex items-start justify-between gap-3 px-1">
+          <div className="flex min-w-0 items-center gap-3">
+            <CharacterAvatar who="siraj" state="happy" size={44} />
+            <div className="min-w-0">
+              <h1 className="text-[24px] font-black leading-tight">رتّبها</h1>
+              <p className="mt-0.5 text-[13px] font-semibold text-muted-foreground">
+                {today}
+              </p>
             </div>
           </div>
           <Link
             href="/settings"
             aria-label="الإعدادات"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] border border-border bg-surface text-muted-foreground shadow-card transition-colors hover:bg-muted hover:text-foreground"
           >
             <Settings className="h-4 w-4" />
           </Link>
         </div>
 
-        <Card className="border-primary-200 bg-primary-50/70 p-4 shadow-card">
+        <Card className="rounded-[18px] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[12px] font-bold text-muted-foreground">
+                تقدم اليوم
+              </p>
+              <p className="mt-0.5 text-[21px] font-black">
+                {doneCount}/{todayCount} منجز
+              </p>
+            </div>
+            <span className="rounded-[12px] bg-violet-50 px-3 py-2 text-[13px] font-black text-violet-900">
+              {formatMinutes(scheduledMinutes)}
+            </span>
+          </div>
+          <DayProgressBar
+            total={todayCount}
+            done={doneCount}
+            showCount={false}
+            className="mt-3"
+          />
+          <MetricsStrip className="mt-3" columns={2} items={progressMetrics} />
+        </Card>
+
+        <Card className="relative overflow-hidden p-0">
+          <span className="absolute inset-y-3 start-0 w-1 rounded-e-full bg-sky-500" />
           {nextItem ? (
-            <div className="flex flex-col gap-4">
+            <div className="px-3 py-3 ps-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="mb-2 flex items-center gap-2 text-primary-700">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-[12px] font-bold">المهمة التالية</span>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="rounded-[7px] bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-900">
+                      التالية
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted-foreground">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      {formatTimeRange(nextItem.start_time, nextItem.end_time)}
+                    </span>
                   </div>
-                  <h2 className="text-[22px] font-bold leading-tight">
+                  <h2 className="line-clamp-2 text-[18px] font-black leading-snug">
                     {nextItem.title}
                   </h2>
-                  <p className="mt-1 text-[14px] font-semibold text-primary-800">
-                    {formatTimeRange(nextItem.start_time, nextItem.end_time)}
-                  </p>
                 </div>
-                <Button
-                  size="icon"
+                <button
+                  type="button"
                   onClick={() => markNextDone(nextItem)}
                   aria-label="إنجاز المهمة"
-                  className="shrink-0 rounded-full"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card transition-colors hover:bg-emerald-600"
                 >
                   <Check className="h-4 w-4" />
-                </Button>
+                </button>
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => router.push("/today")} className="justify-center">
-                  <ListChecks className="h-4 w-4" />
-                  افتح يومي
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button
+                  onClick={() => router.push("/today")}
+                  className="h-9 justify-center rounded-[10px] text-[13px]"
+                  size="sm"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                  فتح اليوم
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => router.push("/calendar")}
-                  className="justify-center"
+                  className="h-9 justify-center rounded-[10px] text-[13px]"
+                  size="sm"
                 >
                   <CalendarDays className="h-4 w-4" />
-                  في التقويم
+                  التقويم
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-primary-600" />
+            <div className="flex items-center gap-3 px-3 py-3 ps-4">
+              <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-sky-50 text-sky-700">
+                <Clock3 className="h-4 w-4" />
+              </span>
               <div>
-                <h2 className="text-[17px] font-bold">لا توجد مهمة قادمة الآن</h2>
-                <p className="text-[13px] text-muted-foreground">
-                  أضف مهمة بوقت محدد لتظهر هنا فوراً.
+                <h2 className="text-[15px] font-black">لا توجد مهمة قادمة الآن</h2>
+                <p className="text-[12px] text-muted-foreground">
+                  أضف مهمة بوقت محدد لتظهر هنا.
                 </p>
               </div>
             </div>
           )}
         </Card>
 
-        <Card className="p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-[14px] font-semibold">تقدم اليوم</span>
-              <span className="text-[12px] text-muted-foreground">
-                {doneCount} من {todayCount} منجزة
-              </span>
-            </div>
-            <Link
-              href="/today"
-              className="flex items-center gap-1 text-[12px] text-primary-700 hover:underline"
-            >
-              <span>عرض الكل</span>
-              <ChevronLeft className="h-3 w-3" />
-            </Link>
-          </div>
-          <DayProgressBar total={todayCount} done={doneCount} />
-        </Card>
-
-        <div className="grid grid-cols-3 gap-3">
-          <Link href="/today">
-            <Card className="flex flex-col items-center gap-1 p-4 text-center">
-              <span className="text-[24px] font-bold text-primary-600">{todayCount}</span>
-              <span className="text-[11px] text-muted-foreground">مهام اليوم</span>
-            </Card>
-          </Link>
-          <Link href="/calendar">
-            <Card className="flex flex-col items-center gap-1 p-4 text-center">
-              <CalendarDays className="h-6 w-6 text-primary-600" />
-              <span className="text-[11px] text-muted-foreground">التقويم</span>
-            </Card>
-          </Link>
-          <Link href="/chat">
-            <Card className="flex flex-col items-center gap-1 p-4 text-center">
-              <Sparkles className="h-6 w-6 text-primary-600" />
-              <span className="text-[11px] text-muted-foreground">رتّب</span>
-            </Card>
-          </Link>
-        </div>
-
-        <Card className="flex flex-col items-center gap-3 p-6">
-          <CharacterAvatar who="siraj" state="encouraging" size={64} />
-          <p className="text-center text-[15px] font-semibold">
-            قل لسراج ماذا تريد أن ترتب
-          </p>
+        <Card className="p-3">
           <VoiceTranscriptOverlay
             interimTranscript={interimTranscript}
             isListening={isListening}
           />
-          <div className="flex items-center gap-3">
-            <VoiceButton
-              isListening={isListening}
-              onStart={toggleVoice}
-              onStop={toggleVoice}
-              isSupported={voiceSupported}
-              size="lg"
-            />
-            <Button asChild size="lg">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <VoiceButton
+                isListening={isListening}
+                onStart={toggleVoice}
+                onStop={toggleVoice}
+                isSupported={voiceSupported}
+                size="sm"
+              />
+              <div className="min-w-0">
+                <p className="text-[14px] font-bold">إضافة بالصوت</p>
+                <p className="truncate text-[12px] text-muted-foreground">
+                  قل المهمة ثم راجعها في الشات
+                </p>
+              </div>
+            </div>
+            <Button asChild size="sm" className="h-9 rounded-[10px]">
               <Link href="/today">
                 <Plus className="h-4 w-4" />
-                أضف مهمة
+                مهمة
               </Link>
             </Button>
           </div>
         </Card>
+
+        <div className="grid grid-cols-2 gap-2">
+          <QuickLink href="/today" icon={<LayoutGrid className="h-4 w-4" />} label="لوحة اليوم" />
+          <QuickLink href="/calendar" icon={<CalendarDays className="h-4 w-4" />} label="التقويم" />
+          <QuickLink href="/chat" icon={<Sparkles className="h-4 w-4" />} label="رتّب" />
+          <QuickLink href="/settings" icon={<Settings className="h-4 w-4" />} label="الإعدادات" />
+        </div>
       </div>
 
       <BottomNav />
     </AppShellMobile>
+  );
+}
+
+function QuickLink({
+  href,
+  icon,
+  label,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-2 rounded-[14px] border border-border bg-surface px-3 py-3 text-[14px] font-bold shadow-card transition-colors hover:bg-muted"
+    >
+      <span>{label}</span>
+      <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-background text-muted-foreground">
+        {icon}
+      </span>
+      <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+    </Link>
   );
 }
