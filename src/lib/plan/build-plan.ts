@@ -260,6 +260,7 @@ function buildBucket(draft: DayDraft, now: Date, inbox: Task[]): DayBucket {
     start_time: new Date(item.start).toISOString(),
     end_time: new Date(item.end).toISOString(),
     item_type: "proposed_task" as const,
+    show_in_calendar: true,
     reason: item.reason,
   }));
 
@@ -434,6 +435,7 @@ function createTimedTaskItem(
     start_time: start.toISOString(),
     end_time: end.toISOString(),
     item_type: "proposed_task",
+    show_in_calendar: true,
     reason: `وضعتها حسب "${time.label}"`,
   };
 }

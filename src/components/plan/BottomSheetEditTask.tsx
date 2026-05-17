@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CalendarVisibilityToggle } from "@/components/plan/CalendarVisibilityToggle";
+import { shouldShowTaskInCalendar } from "@/lib/calendar/upcoming";
 import type { PlanItem } from "@/lib/types";
 
 interface BottomSheetEditTaskProps {
@@ -50,12 +52,14 @@ export function BottomSheetEditTask({
   const [date, setDate] = React.useState("");
   const [start, setStart] = React.useState("");
   const [duration, setDuration] = React.useState(60);
+  const [showInCalendar, setShowInCalendar] = React.useState(true);
 
   React.useEffect(() => {
     if (!item) return;
     setTitle(item.title);
     setDate(toLocalDateInput(item.start_time));
     setStart(toLocalTimeInput(item.start_time));
+    setShowInCalendar(shouldShowTaskInCalendar(item));
     const minutes = Math.round(
       (new Date(item.end_time).getTime() - new Date(item.start_time).getTime()) /
         60000
@@ -65,6 +69,8 @@ export function BottomSheetEditTask({
 
   if (!item) return null;
 
+  const canChooseCalendarVisibility = item.item_type !== "existing_event";
+
   function handleSave() {
     if (!item) return;
     const nextTitle = title.trim();
@@ -73,7 +79,15 @@ export function BottomSheetEditTask({
     const endISO = new Date(
       new Date(startISO).getTime() + Math.max(duration, 5) * 60_000
     ).toISOString();
-    onSave?.({ ...item, title: nextTitle, start_time: startISO, end_time: endISO });
+    onSave?.({
+      ...item,
+      title: nextTitle,
+      start_time: startISO,
+      end_time: endISO,
+      show_in_calendar: canChooseCalendarVisibility
+        ? showInCalendar
+        : item.show_in_calendar,
+    });
     onOpenChange(false);
   }
 
@@ -128,6 +142,13 @@ export function BottomSheetEditTask({
               />
             </div>
           </div>
+
+          {canChooseCalendarVisibility && (
+            <CalendarVisibilityToggle
+              checked={showInCalendar}
+              onCheckedChange={setShowInCalendar}
+            />
+          )}
 
           {(onPin || onDelete) && (
             <div className="my-2 flex gap-2">

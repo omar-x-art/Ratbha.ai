@@ -56,6 +56,7 @@ export interface PlanItem {
   item_type: ItemType;
   google_event_id?: string | null;
   is_locked?: boolean;
+  show_in_calendar?: boolean;
   reason?: string;
 }
 

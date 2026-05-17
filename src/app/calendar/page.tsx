@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { arabicWeekday, cn, formatTimeRange } from "@/lib/utils";
 import { useTasksStore } from "@/lib/store/tasks-store";
+import { shouldShowTaskInCalendar } from "@/lib/calendar/upcoming";
 import type { DayBucket, PillStatus, PlanItem } from "@/lib/types";
 
 type ViewMode = "day" | "week" | "month";
@@ -151,6 +152,7 @@ function buildEventMap(
 
   buckets.forEach((bucket) => {
     bucket.items.forEach((item) => {
+      if (!shouldShowTaskInCalendar(item)) return;
       appendItem(map, {
         ...item,
         source: "ratbha",

@@ -61,6 +61,21 @@ describe("useTasksStore", () => {
     );
   });
 
+  it("adds a quick item that can stay out of the calendar", () => {
+    useTasksStore.getState().addQuickItem("مهمة داخل اليوم فقط", {
+      date: "2026-05-17",
+      time: "17:00",
+      showInCalendar: false,
+    });
+
+    const item = useTasksStore
+      .getState()
+      .buckets.flatMap((bucket) => bucket.items)
+      .find((candidate) => candidate.title === "مهمة داخل اليوم فقط");
+
+    expect(item?.show_in_calendar).toBe(false);
+  });
+
   it("moves an item to the bucket matching its edited date", () => {
     const item = useTasksStore.getState().buckets[0].items[0];
     const nextStart = new Date(item.start_time);

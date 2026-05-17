@@ -13,6 +13,7 @@ import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
 import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { useToast } from "@/components/ui/use-toast";
+import { shouldShowTaskInCalendar } from "@/lib/calendar/upcoming";
 import { useTasksStore } from "@/lib/store/tasks-store";
 import type { PillStatus, PlanItem } from "@/lib/types";
 
@@ -76,10 +77,13 @@ export default function PlanReviewPage() {
   async function saveToCalendar() {
     const items = buckets
       .flatMap((bucket) => bucket.items)
-      .filter((item) => item.item_type !== "existing_event");
+      .filter(
+        (item) =>
+          item.item_type !== "existing_event" && shouldShowTaskInCalendar(item)
+      );
 
     if (items.length === 0) {
-      toast({ title: "لا توجد مهام جديدة للحفظ" });
+      toast({ title: "لا توجد مهام مختارة للتقويم" });
       return;
     }
 

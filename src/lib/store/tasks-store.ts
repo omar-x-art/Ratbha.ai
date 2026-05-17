@@ -11,6 +11,7 @@ interface AddQuickItemOptions {
   date?: string;
   time?: string;
   durationMinutes?: number;
+  showInCalendar?: boolean;
 }
 
 interface TasksStore {
@@ -145,6 +146,7 @@ function createQuickItem(title: string, options?: AddQuickItemOptions): PlanItem
     start_time: start.toISOString(),
     end_time: end.toISOString(),
     item_type: "proposed_task",
+    show_in_calendar: options?.showInCalendar ?? true,
   };
 }
 

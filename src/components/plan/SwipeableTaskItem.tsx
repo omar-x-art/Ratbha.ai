@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Check, Trash2, MoreVertical, Clock3 } from "lucide-react";
+import { CalendarOff, Check, Clock3, MoreVertical, Trash2 } from "lucide-react";
 import { cn, formatTimeRange } from "@/lib/utils";
 import { StatusPill } from "@/components/plan/StatusPill";
+import { shouldShowTaskInCalendar } from "@/lib/calendar/upcoming";
 import type { PillStatus, PlanItem } from "@/lib/types";
 
 interface SwipeableTaskItemProps {
@@ -266,6 +267,12 @@ export function SwipeableTaskItem({
                 status={status}
                 onClick={onStatusClick ? () => onStatusClick(item) : undefined}
               />
+              {!shouldShowTaskInCalendar(item) && (
+                <span className="inline-flex items-center gap-1 rounded-[7px] bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                  <CalendarOff className="h-3 w-3" />
+                  مهام فقط
+                </span>
+              )}
             </div>
           </div>
         </div>

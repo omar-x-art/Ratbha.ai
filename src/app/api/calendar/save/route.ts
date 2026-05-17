@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { saveCalendarEvents } from "@/lib/google/calendar";
+import { shouldShowTaskInCalendar } from "@/lib/calendar/upcoming";
 import {
   GOOGLE_ACCOUNTS_COOKIE,
   parseCalendarAccountsCookie,
@@ -16,6 +17,7 @@ const SaveSchema = z.object({
       title: z.string(),
       start_time: z.string(),
       end_time: z.string(),
+      show_in_calendar: z.boolean().optional(),
     })
   ),
 });
@@ -39,10 +41,13 @@ export async function POST(req: NextRequest) {
   const accounts = parseCalendarAccountsCookie(
     req.cookies.get(GOOGLE_ACCOUNTS_COOKIE)?.value
   );
-  const result = await saveCalendarEvents(parsed.data.items, {
-    accounts,
-    accountId: parsed.data.accountId,
-  });
+  const result = await saveCalendarEvents(
+    parsed.data.items.filter(shouldShowTaskInCalendar),
+    {
+      accounts,
+      accountId: parsed.data.accountId,
+    }
+  );
 
   return NextResponse.json(result);
 }

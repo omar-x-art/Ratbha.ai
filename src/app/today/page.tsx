@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { CalendarClock, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { AppShellMobile } from "@/components/shell/AppShellMobile";
 import { TopBar } from "@/components/shell/TopBar";
 import { BottomNav } from "@/components/shell/BottomNav";
@@ -12,12 +13,15 @@ import { NextTaskWidget } from "@/components/plan/NextTaskWidget";
 import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
 import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
+import { CalendarVisibilityToggle } from "@/components/plan/CalendarVisibilityToggle";
 import { SkeletonGroup } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { Card } from "@/components/ui/card";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
 import { useVoiceInput } from "@/lib/hooks/use-voice-input";
+import { useUpcomingCalendarEvents } from "@/lib/hooks/use-upcoming-calendar-events";
+import { pickNextUpcoming } from "@/lib/calendar/upcoming";
 import { useTasksStore } from "@/lib/store/tasks-store";
 import type { DayBucket, PillStatus, PlanItem } from "@/lib/types";
 
@@ -26,6 +30,7 @@ interface QuickTaskDraft {
   date: string;
   time: string;
   durationMinutes: number;
+  showInCalendar: boolean;
 }
 
 function toDateInput(date: Date) {
@@ -47,6 +52,7 @@ function getDefaultDraft(): QuickTaskDraft {
     date: toDateInput(start),
     time: toTimeInput(start),
     durationMinutes: 30,
+    showInCalendar: true,
   };
 }
 
@@ -56,26 +62,12 @@ function getEmptyDraft(): QuickTaskDraft {
     date: "",
     time: "",
     durationMinutes: 30,
+    showInCalendar: true,
   };
 }
 
-function getUpcomingItem(items: PlanItem[], itemStatuses: Record<string, PillStatus>) {
-  const now = Date.now();
-  return (
-    [...items]
-      .filter(
-        (item) =>
-          itemStatuses[item.id] !== "done" &&
-          new Date(item.end_time).getTime() >= now
-      )
-      .sort(
-        (a, b) =>
-          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      )[0] ?? null
-  );
-}
-
 export default function TodayPage() {
+  const router = useRouter();
   const { toast } = useToast();
 
   const buckets = useTasksStore((s) => s.buckets);
@@ -99,6 +91,7 @@ export default function TodayPage() {
     open: boolean;
     item: PlanItem | null;
   }>({ open: false, item: null });
+  const { events: upcomingCalendarEvents } = useUpcomingCalendarEvents();
 
   const allItems = React.useMemo(
     () =>
@@ -115,7 +108,10 @@ export default function TodayPage() {
   const laterBuckets = buckets.filter(
     (b) => b.label !== "today" && b.label !== "tomorrow"
   );
-  const nextItem = getUpcomingItem(allItems, itemStatuses);
+  const nextEntry = React.useMemo(
+    () => pickNextUpcoming(allItems, itemStatuses, upcomingCalendarEvents),
+    [allItems, itemStatuses, upcomingCalendarEvents]
+  );
 
   React.useEffect(() => {
     setDraft((current) => (current.date && current.time ? current : getDefaultDraft()));
@@ -165,10 +161,13 @@ export default function TodayPage() {
       date: nextDraft.date,
       time: nextDraft.time,
       durationMinutes: nextDraft.durationMinutes,
+      showInCalendar: nextDraft.showInCalendar,
     });
     toast({
       title: "تمت إضافة المهمة",
-      description: "ستظهر في اليوم والتقويم حسب وقتها المحدد.",
+      description: nextDraft.showInCalendar
+        ? "ستظهر في اليوم والتقويم حسب وقتها المحدد."
+        : "ستبقى في يومك فقط ولن تظهر في التقويم.",
       variant: "success",
     });
     setDraft({ ...getDefaultDraft(), title: "" });
@@ -224,13 +223,14 @@ export default function TodayPage() {
           ) : (
             <>
               <NextTaskWidget
-                item={nextItem}
+                item={nextEntry}
                 onDone={() => {
-                  if (nextItem) handleDone(nextItem);
+                  if (nextEntry?.task) handleDone(nextEntry.task);
                 }}
                 onReorganize={() => {
-                  if (nextItem) openEdit(nextItem);
+                  if (nextEntry?.task) openEdit(nextEntry.task);
                 }}
+                onOpenCalendar={() => router.push("/calendar")}
               />
 
               <SirajTodayComposer
@@ -451,6 +451,14 @@ function SirajTodayComposer({
             </div>
           </label>
         </div>
+
+        <CalendarVisibilityToggle
+          checked={draft.showInCalendar}
+          onCheckedChange={(showInCalendar) =>
+            onChange({ ...draft, showInCalendar })
+          }
+          className="mt-2"
+        />
       </div>
     </Card>
   );

@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { MoreVertical } from "lucide-react";
+import { CalendarOff, MoreVertical } from "lucide-react";
 import { cn, formatTimeRange } from "@/lib/utils";
 import { StatusPill } from "@/components/plan/StatusPill";
+import { shouldShowTaskInCalendar } from "@/lib/calendar/upcoming";
 import type { PillStatus, PlanItem } from "@/lib/types";
 
 interface TaskItemProps {
@@ -55,6 +56,12 @@ export function TaskItem({
         <span className="text-[13px] text-muted-foreground">
           {formatTimeRange(item.start_time, item.end_time)}
         </span>
+        {!shouldShowTaskInCalendar(item) && (
+          <span className="inline-flex w-fit items-center gap-1 rounded-[7px] bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+            <CalendarOff className="h-3 w-3" />
+            مهام فقط
+          </span>
+        )}
         {item.reason && (
           <span className="text-[12px] text-muted-foreground/80">
             {item.reason}

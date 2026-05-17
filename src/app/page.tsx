@@ -21,29 +21,11 @@ import { CharacterAvatar } from "@/components/characters/CharacterAvatar";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
 import { useVoiceInput } from "@/lib/hooks/use-voice-input";
+import { useUpcomingCalendarEvents } from "@/lib/hooks/use-upcoming-calendar-events";
+import { getUpcomingSourceLabel, pickNextUpcoming } from "@/lib/calendar/upcoming";
 import { formatTimeRange } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
-import type { PillStatus, PlanItem } from "@/lib/types";
-
-function findNextUpcomingItem(
-  items: PlanItem[],
-  itemStatuses: Record<string, PillStatus>
-): PlanItem | null {
-  const now = Date.now();
-  return (
-    [...items]
-      .filter(
-        (item) =>
-          itemStatuses[item.id] !== "done" &&
-          new Date(item.end_time).getTime() >= now
-      )
-      .sort(
-        (a, b) =>
-          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-      )[0] ?? null
-  );
-}
 
 export default function HomePage() {
   const router = useRouter();
@@ -51,13 +33,13 @@ export default function HomePage() {
   const buckets = useTasksStore((s) => s.buckets);
   const itemStatuses = useTasksStore((s) => s.itemStatuses);
   const markDone = useTasksStore((s) => s.markDone);
+  const { events: upcomingCalendarEvents } = useUpcomingCalendarEvents();
 
-  const todayBucket = buckets.find((b) => b.label === "today");
-  const todayItems = todayBucket?.items ?? [];
-  const allItems = buckets.flatMap((b) => b.items);
-  const nextItem =
-    findNextUpcomingItem(todayItems, itemStatuses) ??
-    findNextUpcomingItem(allItems, itemStatuses);
+  const allItems = React.useMemo(() => buckets.flatMap((b) => b.items), [buckets]);
+  const nextItem = React.useMemo(
+    () => pickNextUpcoming(allItems, itemStatuses, upcomingCalendarEvents),
+    [allItems, itemStatuses, upcomingCalendarEvents]
+  );
 
   const today = new Intl.DateTimeFormat("ar-EG", {
     weekday: "long",
@@ -93,10 +75,13 @@ export default function HomePage() {
     startListening();
   }
 
-  function markNextDone(item: PlanItem) {
-    markDone(item.id);
-    toast({ title: `تم إنجاز: ${item.title}`, variant: "success" });
+  function markNextDone() {
+    if (!nextItem?.task) return;
+    markDone(nextItem.task.id);
+    toast({ title: `تم إنجاز: ${nextItem.title}`, variant: "success" });
   }
+
+  const isNextTask = nextItem?.source === "task";
 
   return (
     <AppShellMobile withBottomNav>
@@ -138,14 +123,27 @@ export default function HomePage() {
                   <h2 className="line-clamp-2 text-[18px] font-black leading-snug">
                     {nextItem.title}
                   </h2>
+                  <p className="mt-1 truncate text-[11px] font-semibold text-muted-foreground">
+                    {getUpcomingSourceLabel(nextItem)}
+                  </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => markNextDone(nextItem)}
-                  aria-label="إنجاز المهمة"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card transition-colors hover:bg-emerald-600"
+                  onClick={
+                    isNextTask ? markNextDone : () => router.push("/calendar")
+                  }
+                  aria-label={isNextTask ? "إنجاز المهمة" : "فتح التقويم"}
+                  className={
+                    isNextTask
+                      ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card transition-colors hover:bg-emerald-600"
+                      : "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sky-500 text-white shadow-card transition-colors hover:bg-sky-600"
+                  }
                 >
-                  <Check className="h-4 w-4" />
+                  {isNextTask ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <CalendarDays className="h-4 w-4" />
+                  )}
                 </button>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">

@@ -1,22 +1,27 @@
 "use client";
 
 import * as React from "react";
-import { Check, Clock, Pencil, CalendarPlus } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, Clock, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatTimeRange } from "@/lib/utils";
-import type { PlanItem } from "@/lib/types";
+import {
+  getUpcomingSourceLabel,
+  type UpcomingEntry,
+} from "@/lib/calendar/upcoming";
 
 interface NextTaskWidgetProps {
-  item?: PlanItem | null;
+  item?: UpcomingEntry | null;
   onDone?: () => void;
   onReorganize?: () => void;
+  onOpenCalendar?: () => void;
 }
 
 export function NextTaskWidget({
   item,
   onDone,
   onReorganize,
+  onOpenCalendar,
 }: NextTaskWidgetProps) {
   if (!item) {
     return (
@@ -36,6 +41,9 @@ export function NextTaskWidget({
     );
   }
 
+  const isTask = item.source === "task";
+  const sourceLabel = getUpcomingSourceLabel(item);
+
   return (
     <Card className="relative overflow-hidden border-border bg-surface p-0 shadow-card">
       <span className="absolute inset-y-3 start-0 w-1 rounded-e-full bg-sky-500" />
@@ -54,28 +62,48 @@ export function NextTaskWidget({
             <h2 className="line-clamp-2 text-[17px] font-bold leading-snug">
               {item.title}
             </h2>
+            <p className="mt-1 truncate text-[11px] font-semibold text-muted-foreground">
+              {sourceLabel}
+            </p>
           </div>
           <button
             type="button"
-            onClick={onDone}
-            aria-label="إنجاز المهمة"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card transition-colors hover:bg-emerald-600 disabled:opacity-50"
-            disabled={!onDone}
+            onClick={isTask ? onDone : onOpenCalendar}
+            aria-label={isTask ? "إنجاز المهمة" : "فتح التقويم"}
+            className={
+              isTask
+                ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-card transition-colors hover:bg-emerald-600 disabled:opacity-50"
+                : "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-sky-500 text-white shadow-card transition-colors hover:bg-sky-600 disabled:opacity-50"
+            }
+            disabled={isTask ? !onDone : !onOpenCalendar}
           >
-            <Check className="h-4 w-4" />
+            {isTask ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <CalendarDays className="h-4 w-4" />
+            )}
           </button>
         </div>
 
         <div className="mt-3">
           <Button
             variant="outline"
-            onClick={onReorganize}
+            onClick={isTask ? onReorganize : onOpenCalendar}
             className="h-8 w-full justify-center rounded-[9px] text-[12px]"
             size="sm"
-            disabled={!onReorganize}
+            disabled={isTask ? !onReorganize : !onOpenCalendar}
           >
-            <Pencil className="h-3.5 w-3.5" />
-            تعديل المهمة
+            {isTask ? (
+              <>
+                <Pencil className="h-3.5 w-3.5" />
+                تعديل المهمة
+              </>
+            ) : (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" />
+                فتح التقويم
+              </>
+            )}
           </Button>
         </div>
       </div>
