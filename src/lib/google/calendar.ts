@@ -13,9 +13,13 @@ export interface CalendarBusyEvent {
   end: string;
   isMeeting: boolean;
   isAllDay: boolean;
+  kind: "event" | "occasion";
   accountId: string;
   accountEmail: string;
   accountName?: string;
+  calendarId: string;
+  calendarName: string;
+  calendarColor?: string;
 }
 
 export interface CalendarFetchError {
@@ -36,10 +40,26 @@ interface GoogleCalendarEvent {
   summary?: string;
   start?: GoogleEventDate;
   end?: GoogleEventDate;
+  eventType?: string;
 }
 
 interface GoogleEventsResponse {
   items?: GoogleCalendarEvent[];
+}
+
+interface GoogleCalendarListEntry {
+  id?: string;
+  summary?: string;
+  summaryOverride?: string;
+  backgroundColor?: string;
+  primary?: boolean;
+  hidden?: boolean;
+  selected?: boolean;
+  accessRole?: string;
+}
+
+interface GoogleCalendarListResponse {
+  items?: GoogleCalendarListEntry[];
 }
 
 interface SavedCalendarEvent {
@@ -51,6 +71,14 @@ interface SavedCalendarEvent {
 }
 
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
+const DEFAULT_CALENDAR: Required<
+  Pick<GoogleCalendarListEntry, "id" | "summary" | "primary" | "selected">
+> = {
+  id: "primary",
+  summary: "Google Calendar",
+  primary: true,
+  selected: true,
+};
 
 export async function fetchCalendarEvents({
   timeMin,
@@ -84,16 +112,26 @@ export async function fetchCalendarEvents({
     };
 
     try {
+      const result = await fetchEventsForAccount({
+        token: legacyToken,
+        account: legacyAccount,
+        timeMin,
+        timeMax,
+      });
+
       return {
-        events: await fetchEventsWithAccessToken({
-          token: legacyToken,
-          account: legacyAccount,
-          timeMin,
-          timeMax,
-        }),
-        mode: "legacy",
+        events: result.events,
+        mode: result.events.length > 0 || !result.error ? "legacy" : "error",
         accounts: [legacyAccount],
-        errors: [],
+        errors: result.error
+          ? [
+              {
+                accountId: legacyAccount.id,
+                email: legacyAccount.email,
+                message: result.error,
+              },
+            ]
+          : [],
       };
     } catch (error) {
       return {
@@ -115,13 +153,13 @@ export async function fetchCalendarEvents({
     accounts.map(async (account) => {
       try {
         const token = await refreshGoogleAccessToken(account.refreshToken);
-        const events = await fetchEventsWithAccessToken({
+        const result = await fetchEventsForAccount({
           token,
           account,
           timeMin,
           timeMax,
         });
-        return { account, events, error: null as string | null };
+        return { account, events: result.events, error: result.error };
       } catch (error) {
         return { account, events: [], error: getErrorMessage(error) };
       }
@@ -143,7 +181,10 @@ export async function fetchCalendarEvents({
 
   return {
     events: events.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()),
-    mode: errors.length === accounts.length ? "error" : "google",
+    mode:
+      errors.length === accounts.length && events.length === 0
+        ? "error"
+        : "google",
     accounts: toPublicGoogleAccounts(accounts),
     errors,
   };
@@ -182,7 +223,7 @@ export async function saveCalendarEvents(
   }
 }
 
-async function fetchEventsWithAccessToken({
+async function fetchEventsForAccount({
   token,
   account,
   timeMin,
@@ -193,6 +234,77 @@ async function fetchEventsWithAccessToken({
   timeMin: Date;
   timeMax: Date;
 }) {
+  let calendars: GoogleCalendarListEntry[] = [DEFAULT_CALENDAR];
+  let error: string | null = null;
+
+  try {
+    calendars = await fetchSelectedCalendars(token);
+  } catch (caught) {
+    error = getErrorMessage(caught);
+  }
+
+  const results = await Promise.all(
+    calendars.map(async (calendar) => {
+      try {
+        return {
+          events: await fetchCalendarEventsWithAccessToken({
+            token,
+            account,
+            calendar,
+            timeMin,
+            timeMax,
+          }),
+          error: null as string | null,
+        };
+      } catch (caught) {
+        return { events: [], error: getErrorMessage(caught) };
+      }
+    })
+  );
+
+  const events = results.flatMap((result) => result.events);
+  const calendarError = results.find((result) => result.error)?.error ?? null;
+
+  return { events, error: error ?? calendarError };
+}
+
+async function fetchSelectedCalendars(token: string) {
+  const params = new URLSearchParams({
+    maxResults: "250",
+    minAccessRole: "reader",
+    showDeleted: "false",
+  });
+
+  const response = await fetch(
+    `${GOOGLE_CALENDAR_API}/users/me/calendarList?${params.toString()}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+
+  if (!response.ok) throw new Error(`calendar_list_${response.status}`);
+
+  const data = (await response.json()) as GoogleCalendarListResponse;
+  const calendars = (data.items ?? []).filter(shouldReadCalendar);
+  const hasPrimary = calendars.some((calendar) => calendar.primary);
+
+  return hasPrimary ? calendars : [DEFAULT_CALENDAR, ...calendars];
+}
+
+async function fetchCalendarEventsWithAccessToken({
+  token,
+  account,
+  calendar,
+  timeMin,
+  timeMax,
+}: {
+  token: string;
+  account: Pick<GoogleCalendarAccount, "id" | "email" | "name">;
+  calendar: GoogleCalendarListEntry;
+  timeMin: Date;
+  timeMax: Date;
+}) {
+  const calendarId = calendar.id ?? "primary";
   const params = new URLSearchParams({
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
@@ -202,7 +314,7 @@ async function fetchEventsWithAccessToken({
   });
 
   const response = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params.toString()}`,
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     }
@@ -211,7 +323,9 @@ async function fetchEventsWithAccessToken({
   if (!response.ok) throw new Error(`calendar_events_${response.status}`);
 
   const data = (await response.json()) as GoogleEventsResponse;
-  return (data.items ?? []).flatMap((event) => mapGoogleEvent(event, account));
+  return (data.items ?? []).flatMap((event) =>
+    mapGoogleEvent(event, account, calendar)
+  );
 }
 
 async function saveCalendarEventsWithToken(
@@ -250,27 +364,72 @@ async function saveCalendarEventsWithToken(
 
 function mapGoogleEvent(
   event: GoogleCalendarEvent,
-  account: Pick<GoogleCalendarAccount, "id" | "email" | "name">
+  account: Pick<GoogleCalendarAccount, "id" | "email" | "name">,
+  calendar: GoogleCalendarListEntry
 ): CalendarBusyEvent[] {
   const start = normalizeGoogleDate(event.start);
   const end = normalizeGoogleDate(event.end);
   if (!start || !end) return [];
 
   const title = event.summary ?? "حدث في التقويم";
+  const calendarId = calendar.id ?? "primary";
+  const calendarName =
+    calendar.summaryOverride ?? calendar.summary ?? "Google Calendar";
 
   return [
     {
-      id: `${account.id}:${event.id ?? start.value}`,
+      id: `${account.id}:${calendarId}:${event.id ?? start.value}`,
       title,
       start: start.value,
       end: end.value,
       isMeeting: /(اجتماع|meeting|meet|call|مكالمة)/i.test(title),
       isAllDay: start.isAllDay,
+      kind: classifyCalendarEventKind({
+        eventTitle: title,
+        eventType: event.eventType,
+        calendarName,
+        isAllDay: start.isAllDay,
+      }),
       accountId: account.id,
       accountEmail: account.email,
       accountName: account.name,
+      calendarId,
+      calendarName,
+      calendarColor: calendar.backgroundColor,
     },
   ];
+}
+
+function shouldReadCalendar(calendar: GoogleCalendarListEntry) {
+  if (!calendar.id) return false;
+  if (calendar.hidden) return false;
+  if (calendar.selected === false && !calendar.primary) return false;
+  return calendar.accessRole !== "freeBusyReader";
+}
+
+function classifyCalendarEventKind({
+  eventTitle,
+  eventType,
+  calendarName,
+  isAllDay,
+}: {
+  eventTitle: string;
+  eventType?: string;
+  calendarName: string;
+  isAllDay: boolean;
+}): CalendarBusyEvent["kind"] {
+  const text = `${eventTitle} ${calendarName}`.toLowerCase();
+  const isOccasion =
+    isAllDay &&
+    /(holiday|holidays|vacation|observance|birthday|عيد|أعياد|اجاز|إجاز|عطلة|عطلات|مناسبة|ميلاد)/i.test(
+      text
+    );
+
+  if (isOccasion || eventType === "birthday" || eventType === "outOfOffice") {
+    return "occasion";
+  }
+
+  return "event";
 }
 
 function normalizeGoogleDate(value?: GoogleEventDate) {

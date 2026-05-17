@@ -40,9 +40,13 @@ interface CalendarBusyEvent {
   start: string;
   end: string;
   isAllDay: boolean;
+  kind: "event" | "occasion";
   accountId: string;
   accountEmail: string;
   accountName?: string;
+  calendarId: string;
+  calendarName: string;
+  calendarColor?: string;
 }
 
 interface CalendarFetchError {
@@ -60,9 +64,11 @@ interface CalendarEventsResponse {
 }
 
 type DisplayCalendarItem = PlanItem & {
-  source: "ratbha" | "google";
+  source: "ratbha" | "google" | "occasion";
   accountEmail?: string;
   accountName?: string;
+  calendarName?: string;
+  calendarColor?: string;
   isAllDay?: boolean;
 };
 
@@ -163,9 +169,11 @@ function buildEventMap(
       google_event_id: event.id,
       is_locked: true,
       reason: event.accountEmail,
-      source: "google",
+      source: event.kind === "occasion" ? "occasion" : "google",
       accountEmail: event.accountEmail,
       accountName: event.accountName,
+      calendarName: event.calendarName,
+      calendarColor: event.calendarColor,
       isAllDay: event.isAllDay,
     });
   });
@@ -232,7 +240,7 @@ function getItemStatus(
   item: DisplayCalendarItem,
   itemStatuses: Record<string, PillStatus>
 ): PillStatus {
-  if (item.source === "google") return "active";
+  if (item.source !== "ratbha") return "active";
   if (itemStatuses[item.id]) return itemStatuses[item.id];
   if (item.is_locked) return "active";
   return "planned";
@@ -254,6 +262,9 @@ function getBlockStyle(item: DisplayCalendarItem): React.CSSProperties {
 }
 
 function getEventClasses(item: DisplayCalendarItem, status: PillStatus) {
+  if (item.source === "occasion") {
+    return "border-amber-200 bg-amber-50 text-amber-900";
+  }
   if (item.source === "google") {
     return "border-sky-200 bg-sky-50 text-sky-900";
   }
@@ -263,6 +274,20 @@ function getEventClasses(item: DisplayCalendarItem, status: PillStatus) {
     return "border-primary-200 bg-primary-50 text-primary-800";
   }
   return "border-secondary-200 bg-secondary-50 text-secondary-800";
+}
+
+function getAllDayPrefix(item: DisplayCalendarItem) {
+  return item.source === "occasion" ? "مناسبة" : "طوال اليوم";
+}
+
+function getExternalCalendarLabel(item: DisplayCalendarItem) {
+  if (item.source === "occasion") {
+    return item.calendarName ? `مناسبة · ${item.calendarName}` : "مناسبة";
+  }
+
+  return item.calendarName
+    ? `Google Calendar · ${item.calendarName}`
+    : `Google Calendar · ${item.accountName ?? item.accountEmail}`;
 }
 
 function buildFetchWindow(view: ViewMode, selectedDate: Date) {
@@ -455,6 +480,7 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
+          <CalendarLegend />
         </div>
 
         {view === "day" && (
@@ -499,6 +525,25 @@ export default function CalendarPage() {
   );
 }
 
+function CalendarLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-muted-foreground">
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-secondary-400" />
+        مهام
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-sky-400" />
+        Google
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span className="h-2 w-2 rounded-full bg-amber-400" />
+        مناسبات
+      </span>
+    </div>
+  );
+}
+
 function CalendarSyncCard({
   state,
   onRefresh,
@@ -536,7 +581,7 @@ function CalendarSyncCard({
           <div className="min-w-0">
             <p className="text-[14px] font-bold">اربط تقويمك الحقيقي</p>
             <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-              بعد الربط ستظهر أحداث Google بجانب مهام رتّبها.
+              بعد الربط ستظهر أحداث Google والمناسبات بجانب مهام رتّبها.
             </p>
           </div>
           <Button asChild size="sm">
@@ -561,7 +606,7 @@ function CalendarSyncCard({
           </p>
           {data.errors.length > 0 && (
             <p className="mt-2 text-[12px] text-danger">
-              تعذر تحديث {data.errors.length} حساب. أعد الربط إذا استمرت المشكلة.
+              تعذر تحديث كل التقويمات في {data.errors.length} حساب. أعد الربط إذا لم تظهر المناسبات.
             </p>
           )}
         </div>
@@ -653,7 +698,7 @@ function MonthGrid({
                       getEventClasses(item, getItemStatus(item, itemStatuses))
                     )}
                   >
-                    {item.isAllDay ? "طوال اليوم" : formatClock(new Date(item.start_time))}{" "}
+                    {item.isAllDay ? getAllDayPrefix(item) : formatClock(new Date(item.start_time))}{" "}
                     {item.title}
                   </span>
                 ))}
@@ -820,6 +865,9 @@ function DayTimeline({
   const height = HOURS.length * HOUR_HEIGHT;
   const allDayItems = items.filter((item) => item.isAllDay);
   const timedItems = items.filter((item) => !item.isAllDay);
+  const allDayTitle = allDayItems.some((item) => item.source === "occasion")
+    ? "مناسبات اليوم"
+    : "طوال اليوم";
 
   return (
     <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
@@ -838,7 +886,7 @@ function DayTimeline({
       {allDayItems.length > 0 && (
         <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
           <span className="text-[11px] font-semibold text-muted-foreground">
-            طوال اليوم
+            {allDayTitle}
           </span>
           {allDayItems.map((item) => (
             <div
@@ -917,9 +965,9 @@ function CalendarBlock({
           ? formatClock(new Date(item.start_time))
           : formatTimeRange(item.start_time, item.end_time)}
       </p>
-      {!compact && item.source === "google" && (
+      {!compact && item.source !== "ratbha" && (
         <p className="mt-0.5 truncate text-[10px] opacity-75">
-          {item.accountName ?? item.accountEmail}
+          {getExternalCalendarLabel(item)}
         </p>
       )}
     </div>
@@ -958,12 +1006,17 @@ function AgendaList({
               <p className="mt-1 flex items-center gap-1 text-[12px] text-muted-foreground">
                 <CalendarClock className="h-3.5 w-3.5" />
                 {item.isAllDay
-                  ? "طوال اليوم"
+                  ? getAllDayPrefix(item)
                   : formatTimeRange(item.start_time, item.end_time)}
               </p>
-              {item.source === "google" && (
-                <p className="mt-1 truncate text-[11px] text-sky-700">
-                  Google Calendar · {item.accountName ?? item.accountEmail}
+              {item.source !== "ratbha" && (
+                <p
+                  className={cn(
+                    "mt-1 truncate text-[11px]",
+                    item.source === "occasion" ? "text-amber-700" : "text-sky-700"
+                  )}
+                >
+                  {getExternalCalendarLabel(item)}
                 </p>
               )}
             </div>

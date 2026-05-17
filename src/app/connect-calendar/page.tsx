@@ -39,7 +39,7 @@ interface StatusMessage {
 const STATUS_MESSAGES: Record<string, StatusMessage> = {
   connected: {
     title: "تم ربط التقويم",
-    description: "سنقرأ أحداثك من Google Calendar ونظهرها داخل التقويم.",
+    description: "سنقرأ أحداثك وتقويمات المناسبات من Google Calendar ونظهرها داخل التقويم.",
     kind: "success",
   },
   missing_google_config: {
@@ -137,7 +137,7 @@ export default function ConnectCalendarPage() {
               <div className="min-w-0">
                 <h1 className="text-[19px] font-bold">اربط Google Calendar</h1>
                 <p className="mt-1 text-[13px] leading-6 text-muted-foreground">
-                  اربط حساب أو أكثر، وسنجمع أحداثهم في التقويم اليومي والأسبوعي
+                  اربط حساب أو أكثر، وسنجمع أحداثهم والمناسبات المختارة في التقويم اليومي والأسبوعي
                   والشهري داخل رتّبها.
                 </p>
               </div>
@@ -146,8 +146,7 @@ export default function ConnectCalendarPage() {
             <div className="flex items-start gap-2 rounded-card border border-primary-100 bg-surface px-3 py-2 text-[12px] leading-5 text-muted-foreground">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
               <span>
-                نستخدم صلاحية الأحداث فقط حتى نقرأ جدولك ونحفظ الخطة عندما تضغط
-                حفظ.
+                نستخدم صلاحيات التقويم اللازمة لقراءة الأحداث والتقويمات المختارة وحفظ الخطة عندما تضغط حفظ.
               </span>
             </div>
 
