@@ -9,14 +9,12 @@ import { PullToRefresh } from "@/components/shell/PullToRefresh";
 import { GroupHeader } from "@/components/plan/GroupHeader";
 import { SwipeableTaskItem } from "@/components/plan/SwipeableTaskItem";
 import { NextTaskWidget } from "@/components/plan/NextTaskWidget";
-import { DayProgressBar } from "@/components/plan/DayProgressBar";
 import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
 import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
 import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { SkeletonGroup } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { Card } from "@/components/ui/card";
-import { MetricsStrip } from "@/components/insights/MetricsStrip";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
 import { useVoiceInput } from "@/lib/hooks/use-voice-input";
@@ -77,19 +75,6 @@ function getUpcomingItem(items: PlanItem[], itemStatuses: Record<string, PillSta
   );
 }
 
-function getItemMinutes(item: PlanItem) {
-  const start = new Date(item.start_time).getTime();
-  const end = new Date(item.end_time).getTime();
-  return Math.max(0, Math.round((end - start) / 60000));
-}
-
-function formatMinutes(minutes: number) {
-  if (minutes < 60) return `${minutes}د`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `${hours}س ${rest}د` : `${hours}س`;
-}
-
 export default function TodayPage() {
   const { toast } = useToast();
 
@@ -130,15 +115,6 @@ export default function TodayPage() {
   const tomorrowBucket = buckets.find((b) => b.label === "tomorrow");
   const laterBuckets = buckets.filter(
     (b) => b.label !== "today" && b.label !== "tomorrow"
-  );
-  const summaryItems = todayBucket?.items.length ? todayBucket.items : allItems;
-  const doneCount = summaryItems.filter(
-    (i) => itemStatuses[i.id] === "done"
-  ).length;
-  const remainingCount = Math.max(0, summaryItems.length - doneCount);
-  const scheduledMinutes = summaryItems.reduce(
-    (total, item) => total + getItemMinutes(item),
-    0
   );
   const nextItem = getUpcomingItem(allItems, itemStatuses);
 
@@ -242,7 +218,7 @@ export default function TodayPage() {
 
   return (
     <AppShellMobile withBottomNav>
-      <TopBar title="لوحة اليوم" showSettings className="bg-surface/90" />
+      <TopBar title="يومي" showSettings className="bg-surface/90" />
 
       <PullToRefresh onRefresh={refresh}>
         <div className="flex flex-col gap-3 px-3 pb-8 pt-3">
@@ -253,13 +229,6 @@ export default function TodayPage() {
             </>
           ) : (
             <>
-              <TodayBoardSummary
-                total={summaryItems.length}
-                done={doneCount}
-                remaining={remainingCount}
-                scheduledMinutes={scheduledMinutes}
-              />
-
               <NextTaskWidget
                 item={nextItem}
                 onDone={() => {
@@ -352,49 +321,6 @@ export default function TodayPage() {
   );
 }
 
-function TodayBoardSummary({
-  total,
-  done,
-  remaining,
-  scheduledMinutes,
-}: {
-  total: number;
-  done: number;
-  remaining: number;
-  scheduledMinutes: number;
-}) {
-  const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-  const metrics = [
-    { label: "منجز", value: `${done}`, tone: "emerald" as const },
-    { label: "متبقي", value: `${remaining}`, tone: "amber" as const },
-    {
-      label: "وقت مجدول",
-      value: formatMinutes(scheduledMinutes),
-      tone: "violet" as const,
-    },
-  ];
-
-  return (
-    <section className="rounded-[18px] border border-border bg-surface p-3 shadow-card">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[12px] font-bold text-sky-700">لوحة اليوم</p>
-          <h1 className="mt-0.5 text-[22px] font-black leading-tight">
-            {progress}% منجز
-          </h1>
-        </div>
-        <span className="flex h-10 min-w-10 items-center justify-center rounded-[12px] bg-sky-50 px-3 text-[14px] font-black text-sky-900">
-          {done}/{total}
-        </span>
-      </div>
-
-      <DayProgressBar total={total} done={done} showCount={false} className="mt-3" />
-
-      <MetricsStrip className="mt-3" items={metrics} />
-    </section>
-  );
-}
-
 function SirajTodayComposer({
   draft,
   onChange,
@@ -457,15 +383,6 @@ function SirajTodayComposer({
       />
 
       <div className="px-3 py-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="rounded-[7px] bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-900">
-            إضافة سريعة
-          </span>
-          <span className="text-[11px] font-semibold text-muted-foreground">
-            الوقت يظهر في التقويم
-          </span>
-        </div>
-
         <div className="flex items-end gap-2 rounded-[14px] border border-border bg-background/70 px-2.5 py-2">
           <VoiceButton
             isListening={isListening}

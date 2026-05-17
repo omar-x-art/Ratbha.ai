@@ -18,10 +18,8 @@ import { BottomNav } from "@/components/shell/BottomNav";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CharacterAvatar } from "@/components/characters/CharacterAvatar";
-import { MetricsStrip } from "@/components/insights/MetricsStrip";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { VoiceTranscriptOverlay } from "@/components/voice/VoiceTranscriptOverlay";
-import { DayProgressBar } from "@/components/plan/DayProgressBar";
 import { useVoiceInput } from "@/lib/hooks/use-voice-input";
 import { formatTimeRange } from "@/lib/utils";
 import { useToast } from "@/components/ui/use-toast";
@@ -47,19 +45,6 @@ function findNextUpcomingItem(
   );
 }
 
-function getItemMinutes(item: PlanItem) {
-  const start = new Date(item.start_time).getTime();
-  const end = new Date(item.end_time).getTime();
-  return Math.max(0, Math.round((end - start) / 60000));
-}
-
-function formatMinutes(minutes: number) {
-  if (minutes < 60) return `${minutes}د`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest > 0 ? `${hours}س ${rest}د` : `${hours}س`;
-}
-
 export default function HomePage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -69,18 +54,7 @@ export default function HomePage() {
 
   const todayBucket = buckets.find((b) => b.label === "today");
   const todayItems = todayBucket?.items ?? [];
-  const todayCount = todayItems.length;
   const allItems = buckets.flatMap((b) => b.items);
-  const doneCount = todayItems.filter((i) => itemStatuses[i.id] === "done").length;
-  const remainingCount = Math.max(0, todayCount - doneCount);
-  const scheduledMinutes = todayItems.reduce(
-    (total, item) => total + getItemMinutes(item),
-    0
-  );
-  const progressMetrics = [
-    { label: "متبقي", value: `${remainingCount}`, tone: "amber" as const },
-    { label: "مهام اليوم", value: `${todayCount}`, tone: "sky" as const },
-  ];
   const nextItem =
     findNextUpcomingItem(todayItems, itemStatuses) ??
     findNextUpcomingItem(allItems, itemStatuses);
@@ -145,29 +119,6 @@ export default function HomePage() {
             <Settings className="h-4 w-4" />
           </Link>
         </div>
-
-        <Card className="rounded-[18px] p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[12px] font-bold text-muted-foreground">
-                تقدم اليوم
-              </p>
-              <p className="mt-0.5 text-[21px] font-black">
-                {doneCount}/{todayCount} منجز
-              </p>
-            </div>
-            <span className="rounded-[12px] bg-violet-50 px-3 py-2 text-[13px] font-black text-violet-900">
-              {formatMinutes(scheduledMinutes)}
-            </span>
-          </div>
-          <DayProgressBar
-            total={todayCount}
-            done={doneCount}
-            showCount={false}
-            className="mt-3"
-          />
-          <MetricsStrip className="mt-3" columns={2} items={progressMetrics} />
-        </Card>
 
         <Card className="relative overflow-hidden p-0">
           <span className="absolute inset-y-3 start-0 w-1 rounded-e-full bg-sky-500" />
@@ -263,7 +214,7 @@ export default function HomePage() {
         </Card>
 
         <div className="grid grid-cols-2 gap-2">
-          <QuickLink href="/today" icon={<LayoutGrid className="h-4 w-4" />} label="لوحة اليوم" />
+          <QuickLink href="/today" icon={<LayoutGrid className="h-4 w-4" />} label="يومي" />
           <QuickLink href="/calendar" icon={<CalendarDays className="h-4 w-4" />} label="التقويم" />
           <QuickLink href="/chat" icon={<Sparkles className="h-4 w-4" />} label="رتّب" />
           <QuickLink href="/settings" icon={<Settings className="h-4 w-4" />} label="الإعدادات" />
