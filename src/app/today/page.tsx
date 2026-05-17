@@ -82,7 +82,6 @@ export default function TodayPage() {
   const itemStatuses = useTasksStore((s) => s.itemStatuses);
   const updateItem = useTasksStore((s) => s.updateItem);
   const removeItem = useTasksStore((s) => s.removeItem);
-  const postponeItem = useTasksStore((s) => s.postponeItem);
   const markDone = useTasksStore((s) => s.markDone);
   const setItemStatus = useTasksStore((s) => s.setItemStatus);
   const addQuickItem = useTasksStore((s) => s.addQuickItem);
@@ -142,11 +141,6 @@ export default function TodayPage() {
   function handleDelete(item: PlanItem) {
     removeItem(item.id);
     toast({ title: `تم حذف: ${item.title}`, variant: "danger" });
-  }
-
-  function handlePostpone(id: string) {
-    postponeItem(id);
-    toast({ title: "تم نقل المهمة للغد" });
   }
 
   function handleStatusPick(status: PillStatus) {
@@ -234,9 +228,6 @@ export default function TodayPage() {
                 onDone={() => {
                   if (nextItem) handleDone(nextItem);
                 }}
-                onPostpone={() => {
-                  if (nextItem) handlePostpone(nextItem.id);
-                }}
                 onReorganize={() => {
                   if (nextItem) openEdit(nextItem);
                 }}
@@ -290,14 +281,11 @@ export default function TodayPage() {
         item={editing}
         onSave={(item) => {
           updateItem(item.id, item);
+          toast({ title: "تم حفظ التعديل", variant: "success" });
           setEditOpen(false);
         }}
         onDelete={(id) => {
           removeItem(id);
-          setEditOpen(false);
-        }}
-        onPostpone={(id) => {
-          handlePostpone(id);
           setEditOpen(false);
         }}
       />
@@ -307,7 +295,6 @@ export default function TodayPage() {
         onOpenChange={(o) => setActionsSheet((p) => ({ ...p, open: o }))}
         item={actionsSheet.item}
         onEdit={openEdit}
-        onPostpone={(id) => handlePostpone(id)}
         onDelete={(id) => removeItem(id)}
       />
 

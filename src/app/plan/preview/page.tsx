@@ -15,6 +15,7 @@ import { GroupHeader } from "@/components/plan/GroupHeader";
 import { TaskItem } from "@/components/plan/TaskItem";
 import { TaskActionsSheet } from "@/components/plan/TaskActionsSheet";
 import { StatusPickerSheet } from "@/components/plan/StatusPickerSheet";
+import { BottomSheetEditTask } from "@/components/plan/BottomSheetEditTask";
 import { InboxCard } from "@/components/plan/InboxCard";
 import { useToast } from "@/components/ui/use-toast";
 import { useTasksStore } from "@/lib/store/tasks-store";
@@ -34,11 +35,13 @@ export default function PlanPreviewPage() {
   const buckets = useTasksStore((s) => s.buckets);
   const inbox = useTasksStore((s) => s.inbox);
   const itemStatuses = useTasksStore((s) => s.itemStatuses);
+  const updateItem = useTasksStore((s) => s.updateItem);
   const removeItem = useTasksStore((s) => s.removeItem);
-  const postponeItem = useTasksStore((s) => s.postponeItem);
   const setItemStatus = useTasksStore((s) => s.setItemStatus);
 
   const [saving, setSaving] = React.useState(false);
+  const [editing, setEditing] = React.useState<PlanItem | null>(null);
+  const [editOpen, setEditOpen] = React.useState(false);
   const [actionsSheet, setActionsSheet] = React.useState<{
     open: boolean;
     item: PlanItem | null;
@@ -57,6 +60,17 @@ export default function PlanPreviewPage() {
     if (itemStatuses[item.id]) return itemStatuses[item.id];
     if (item.is_locked) return "active";
     return "planned";
+  }
+
+  function openEdit(item: PlanItem) {
+    setEditing(item);
+    setEditOpen(true);
+  }
+
+  function handleEditSave(next: PlanItem) {
+    updateItem(next.id, next);
+    toast({ title: "تم حفظ التعديل", variant: "success" });
+    setEditOpen(false);
   }
 
   async function saveToCalendar() {
@@ -110,13 +124,6 @@ export default function PlanPreviewPage() {
     }
   }
 
-  function handlePostpone() {
-    if (!actionsSheet.item) return;
-    postponeItem(actionsSheet.item.id);
-    toast({ title: "تم تأجيل المهمة للغد" });
-    setActionsSheet({ open: false, item: null });
-  }
-
   function handleDelete() {
     if (!actionsSheet.item) return;
     removeItem(actionsSheet.item.id);
@@ -162,6 +169,7 @@ export default function PlanPreviewPage() {
                   key={item.id}
                   item={item}
                   pillStatus={getItemStatus(item)}
+                  onEdit={openEdit}
                   onActionsClick={(i) => setActionsSheet({ open: true, item: i })}
                   onStatusClick={(i) => setStatusSheet({ open: true, item: i })}
                 />
@@ -218,11 +226,22 @@ export default function PlanPreviewPage() {
 
       <BottomNav />
 
+      <BottomSheetEditTask
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        item={editing}
+        onSave={handleEditSave}
+        onDelete={(id) => {
+          removeItem(id);
+          setEditOpen(false);
+        }}
+      />
+
       <TaskActionsSheet
         open={actionsSheet.open}
         onOpenChange={(o) => setActionsSheet((p) => ({ ...p, open: o }))}
         item={actionsSheet.item}
-        onPostpone={handlePostpone}
+        onEdit={openEdit}
         onDelete={handleDelete}
       />
 

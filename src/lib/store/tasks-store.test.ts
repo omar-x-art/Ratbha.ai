@@ -83,6 +83,21 @@ describe("useTasksStore", () => {
     );
   });
 
+  it("updates an item title", () => {
+    const item = useTasksStore.getState().buckets[0].items[0];
+
+    useTasksStore.getState().updateItem(item.id, {
+      title: "عنوان معدل",
+    });
+
+    const updated = useTasksStore
+      .getState()
+      .buckets.flatMap((bucket) => bucket.items)
+      .find((candidate) => candidate.id === item.id);
+
+    expect(updated?.title).toBe("عنوان معدل");
+  });
+
   it("replaces the current plan and clears item statuses", () => {
     const bucket: DayBucket = {
       date: "2026-05-16",

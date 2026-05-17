@@ -31,7 +31,6 @@ export default function PlanReviewPage() {
   const itemStatuses = useTasksStore((s) => s.itemStatuses);
   const updateItem = useTasksStore((s) => s.updateItem);
   const removeItem = useTasksStore((s) => s.removeItem);
-  const postponeItem = useTasksStore((s) => s.postponeItem);
   const pinItem = useTasksStore((s) => s.pinItem);
   const setItemStatus = useTasksStore((s) => s.setItemStatus);
 
@@ -60,16 +59,12 @@ export default function PlanReviewPage() {
 
   function onSaveItem(next: PlanItem) {
     updateItem(next.id, next);
+    toast({ title: "تم حفظ التعديل", variant: "success" });
     setOpen(false);
   }
 
   function onDelete(id: string) {
     removeItem(id);
-    setOpen(false);
-  }
-
-  function onPostpone(id: string) {
-    postponeItem(id);
     setOpen(false);
   }
 
@@ -196,7 +191,6 @@ export default function PlanReviewPage() {
         item={editing}
         onSave={onSaveItem}
         onDelete={onDelete}
-        onPostpone={onPostpone}
         onPin={onPin}
       />
 
@@ -205,10 +199,6 @@ export default function PlanReviewPage() {
         onOpenChange={(o) => setActionsSheet((p) => ({ ...p, open: o }))}
         item={actionsSheet.item}
         onEdit={openEdit}
-        onPostpone={() => {
-          if (actionsSheet.item) onPostpone(actionsSheet.item.id);
-          setActionsSheet({ open: false, item: null });
-        }}
         onDelete={() => {
           if (actionsSheet.item) onDelete(actionsSheet.item.id);
           setActionsSheet({ open: false, item: null });

@@ -10,14 +10,12 @@ import type { PlanItem } from "@/lib/types";
 interface NextTaskWidgetProps {
   item?: PlanItem | null;
   onDone?: () => void;
-  onPostpone?: () => void;
   onReorganize?: () => void;
 }
 
 export function NextTaskWidget({
   item,
   onDone,
-  onPostpone,
   onReorganize,
 }: NextTaskWidgetProps) {
   if (!item) {
@@ -68,24 +66,16 @@ export function NextTaskWidget({
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3">
           <Button
             variant="outline"
-            onClick={onPostpone}
-            className="h-8 justify-center rounded-[9px] text-[12px]"
-            size="sm"
-          >
-            <Clock className="h-3.5 w-3.5" />
-            للغد
-          </Button>
-          <Button
-            variant="ghost"
             onClick={onReorganize}
-            className="h-8 justify-center rounded-[9px] text-[12px]"
+            className="h-8 w-full justify-center rounded-[9px] text-[12px]"
             size="sm"
+            disabled={!onReorganize}
           >
             <Pencil className="h-3.5 w-3.5" />
-            تعديل
+            تعديل المهمة
           </Button>
         </div>
       </div>

@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Archive, CalendarClock, Copy, Pencil, Pin, Trash2 } from "lucide-react";
+import { Pencil, Pin, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
 import type { PlanItem } from "@/lib/types";
 
 interface TaskActionsSheetProps {
@@ -11,9 +10,7 @@ interface TaskActionsSheetProps {
   onOpenChange: (open: boolean) => void;
   item: PlanItem | null;
   onEdit?: (item: PlanItem) => void;
-  onSave?: (item: PlanItem) => void;
   onDelete?: (id: string) => void;
-  onPostpone?: (id: string) => void;
   onPin?: (id: string) => void;
 }
 
@@ -23,7 +20,6 @@ export function TaskActionsSheet({
   item,
   onEdit,
   onDelete,
-  onPostpone,
   onPin,
 }: TaskActionsSheetProps) {
   if (!item) return null;
@@ -38,24 +34,9 @@ export function TaskActionsSheet({
           {onEdit && (
             <ActionButton
               icon={<Pencil className="h-4 w-4" />}
-              label="تعديل الوقت"
+              label="تعديل المهمة"
               onClick={() => {
                 onEdit(item);
-                onOpenChange(false);
-              }}
-            />
-          )}
-          <ActionButton
-            icon={<Copy className="h-4 w-4" />}
-            label="تكرار"
-            onClick={() => onOpenChange(false)}
-          />
-          {onPostpone && (
-            <ActionButton
-              icon={<CalendarClock className="h-4 w-4" />}
-              label="نقل للغد"
-              onClick={() => {
-                onPostpone(item.id);
                 onOpenChange(false);
               }}
             />
@@ -70,12 +51,6 @@ export function TaskActionsSheet({
               }}
             />
           )}
-          <Separator />
-          <ActionButton
-            icon={<Archive className="h-4 w-4" />}
-            label="أرشفة"
-            onClick={() => onOpenChange(false)}
-          />
           {onDelete && (
             <ActionButton
               icon={<Trash2 className="h-4 w-4" />}
