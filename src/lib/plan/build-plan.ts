@@ -5,6 +5,7 @@ import {
   type TaskRequest,
 } from "@/lib/schedule/scheduling-engine";
 import { arabicWeekday } from "@/lib/utils";
+import type { CalendarBusyEvent } from "@/lib/google/calendar";
 import type {
   DayBucket,
   Energy,
@@ -18,6 +19,7 @@ import type {
 interface BuildPlanOptions {
   now?: Date;
   timezone?: string;
+  calendarEvents?: CalendarBusyEvent[];
 }
 
 export interface BuildPlanResult {
@@ -50,6 +52,17 @@ interface ParsedFixedEvent {
   confidence: number;
 }
 
+interface ParsedTimeExpression {
+  hour: number;
+  minute: number;
+  label: string;
+}
+
+interface ParsedTimeRange {
+  start: ParsedTimeExpression;
+  end: ParsedTimeExpression;
+}
+
 interface DayDraft {
   date: Date;
   lockedItems: PlanItem[];
@@ -65,7 +78,10 @@ const DATE_EXPRESSIONS = [
   "الاسبوع القادم",
   "الأسبوع الجاي",
   "الاسبوع الجاي",
+  "النهاردة",
+  "انهاردة",
   "اليوم",
+  "بكرا",
   "بكرة",
   "بكره",
   "غداً",
@@ -104,6 +120,78 @@ const ARABIC_DIGITS: Record<string, string> = {
   "۸": "8",
   "۹": "9",
 };
+
+export function buildPlanFromExtraction(
+  input: string,
+  extraction: TaskExtraction,
+  options: BuildPlanOptions = {}
+): BuildPlanResult {
+  const now = options.now ?? new Date();
+  const timezone = options.timezone ?? extraction.timezone ?? "Africa/Cairo";
+
+  const parsedTasks: ParsedTask[] = extraction.tasks.map((task, index) => {
+    const dateExpression = task.date_expression ?? null;
+    const timeExpression = task.time_expression ?? null;
+    const time = timeExpression ? parseTimeExpression(timeExpression) : null;
+    const date =
+      resolveExtractionDate(task.resolved_date_hint ?? null, dateExpression, now) ??
+      startOfDay(now);
+
+    return {
+      id: `task-${index + 1}`,
+      title: cleanTitle(task.title),
+      original: [task.title, dateExpression, renderTimeForOriginal(timeExpression)]
+        .filter(Boolean)
+        .join(" "),
+      dateExpression,
+      timeExpression: time?.label ?? timeExpression,
+      date,
+      duration_minutes: normalizeDuration(task.duration_minutes),
+      priority: task.priority,
+      energy: task.energy,
+      flexibility: timeExpression ? "fixed" : task.flexibility,
+      confidence: task.confidence,
+    };
+  });
+
+  const fixedEvents: ParsedFixedEvent[] = extraction.fixed_events_mentioned.map(
+    (event, index) => {
+      const dateExpression = event.date_expression ?? null;
+      const timeExpression = event.time_expression ?? null;
+      const time = timeExpression ? parseTimeExpression(timeExpression) : null;
+      const date =
+        resolveExtractionDate(event.resolved_date_hint ?? null, dateExpression, now) ??
+        startOfDay(now);
+
+      return {
+        id: `fixed-${index + 1}`,
+        title: cleanTitle(event.title),
+        original: [event.title, dateExpression, renderTimeForOriginal(timeExpression)]
+          .filter(Boolean)
+          .join(" "),
+        dateExpression,
+        timeExpression: time?.label ?? timeExpression,
+        date,
+        duration_minutes: normalizeDuration(event.duration_minutes),
+        confidence: event.confidence,
+      };
+    }
+  );
+
+  const inbox = extraction.ambiguities.map((item, index) =>
+    createInboxTask(cleanTitle(item.text), index, item.question)
+  );
+
+  return createPlanResult({
+    input,
+    timezone,
+    now,
+    parsedTasks,
+    fixedEvents,
+    inbox,
+    calendarEvents: options.calendarEvents,
+  });
+}
 
 export function buildPlanFromText(
   input: string,
@@ -166,6 +254,34 @@ export function buildPlanFromText(
     inbox.push(createInboxTask(input.trim(), 0, "اكتب المهمة بشكل أوضح لأرتبها لك."));
   }
 
+  return createPlanResult({
+    input,
+    timezone,
+    now,
+    parsedTasks,
+    fixedEvents,
+    inbox,
+    calendarEvents: options.calendarEvents,
+  });
+}
+
+function createPlanResult({
+  input,
+  timezone,
+  now,
+  parsedTasks,
+  fixedEvents,
+  inbox,
+  calendarEvents = [],
+}: {
+  input: string;
+  timezone: string;
+  now: Date;
+  parsedTasks: ParsedTask[];
+  fixedEvents: ParsedFixedEvent[];
+  inbox: Task[];
+  calendarEvents?: CalendarBusyEvent[];
+}): BuildPlanResult {
   const dayDrafts = new Map<string, DayDraft>();
 
   fixedEvents.forEach((event) => {
@@ -201,7 +317,7 @@ export function buildPlanFromText(
 
   const buckets = Array.from(dayDrafts.values())
     .sort((a, b) => startOfDay(a.date).getTime() - startOfDay(b.date).getTime())
-    .map((draft) => buildBucket(draft, now, inbox));
+    .map((draft) => buildBucket(draft, now, inbox, calendarEvents));
 
   const extraction = TaskExtractionSchema.parse({
     language: "ar",
@@ -220,6 +336,7 @@ export function buildPlanFromText(
     fixed_events_mentioned: fixedEvents.map((event) => ({
       title: event.title,
       date_expression: event.dateExpression,
+      resolved_date_hint: toDateKey(event.date),
       time_expression: event.timeExpression,
       duration_minutes: event.duration_minutes,
       confidence: event.confidence,
@@ -244,14 +361,30 @@ export function buildPlanFromText(
   };
 }
 
-function buildBucket(draft: DayDraft, now: Date, inbox: Task[]): DayBucket {
-  const busy = draft.lockedItems.map((item) => ({
-    start: new Date(item.start_time).getTime(),
-    end: new Date(item.end_time).getTime(),
-    title: item.title,
-    isMeeting: item.item_type === "existing_event",
-  }));
-  const windowStart = startOfDay(draft.date).getTime();
+function buildBucket(
+  draft: DayDraft,
+  now: Date,
+  inbox: Task[],
+  calendarEvents: CalendarBusyEvent[]
+): DayBucket {
+  const externalBusy = calendarEvents
+    .filter((event) => shouldUseCalendarEventAsBusy(event, draft.date))
+    .map((event) => ({
+      start: new Date(event.start).getTime(),
+      end: new Date(event.end).getTime(),
+      title: event.title,
+      isMeeting: event.isMeeting,
+    }));
+  const busy = [
+    ...draft.lockedItems.map((item) => ({
+      start: new Date(item.start_time).getTime(),
+      end: new Date(item.end_time).getTime(),
+      title: item.title,
+      isMeeting: item.item_type === "existing_event",
+    })),
+    ...externalBusy,
+  ];
+  const windowStart = schedulingWindowStart(draft.date, now).getTime();
   const windowEnd = addDays(startOfDay(draft.date), 1).getTime();
   const scheduled = scheduleTasks(draft.requests, busy, windowStart, windowEnd);
   const scheduledItems = scheduled.scheduled.map((item) => ({
@@ -261,7 +394,10 @@ function buildBucket(draft: DayDraft, now: Date, inbox: Task[]): DayBucket {
     end_time: new Date(item.end).toISOString(),
     item_type: "proposed_task" as const,
     show_in_calendar: true,
-    reason: item.reason,
+    reason:
+      externalBusy.length > 0
+        ? `${item.reason} مع مراعاة مواعيد التقويم`
+        : item.reason,
   }));
 
   scheduled.unscheduled.forEach((task, index) => {
@@ -289,7 +425,7 @@ function buildBucket(draft: DayDraft, now: Date, inbox: Task[]): DayBucket {
 
 function splitInput(input: string) {
   return input
-    .replace(/\s+و(?=(?:عندي|عندى|عايز|أريد|اريد|لازم|الجيم|أروح|اروح|أخلص|اخلص|راجع|كلم|أكلم|اكلم|مكالمة|اجتماع))/g, "،")
+    .replace(/\s+و(?=(?:عندي|عندى|عايز|عاوز|أريد|اريد|لازم|النهاردة|انهاردة|اليوم|بكرا|بكرة|بكره|غدا|غداً|الجيم|أروح|اروح|أخلص|اخلص|خلص|راجع|أراجع|اكتب|أكتب|اشتري|أشتري|ادفع|أدفع|ذاكر|أذاكر|حضر|أحضر|كلم|أكلم|اكلم|مكالمة|اجتماع))/g, "،")
     .split(/[،,؛;\n]+/)
     .map((part) => part.trim().replace(/^و+/, "").trim())
     .filter(Boolean);
@@ -316,43 +452,87 @@ function resolveSegmentDate(
 
 function parseTimeExpression(segment: string) {
   const normalized = normalizeDigits(segment);
+  const range = parseTimeRange(normalized);
+
+  if (range) {
+    return {
+      hour: range.start.hour,
+      minute: range.start.minute,
+      label: `من الساعة ${formatClockLabel(range.start)}`,
+    };
+  }
 
   if (/(بعد\s+الشغل|بعد\s+العمل)/.test(normalized)) {
     return { hour: 18, minute: 30, label: "بعد الشغل" };
   }
 
-  if (/(الصبح|صباحاً|صباحا)/.test(normalized)) {
+  const explicit = normalized.match(
+    /(?:الساعة|الساعه|ساعة|س)\s*(\d{1,2})(?::(\d{2}))?\s*(صباحاً|صباحا|صباح|مساءً|مساءا|مساء|ص|م)?/
+  );
+  const meridiemLoose = normalized.match(
+    /\b(\d{1,2})(?::(\d{2}))?\s*(صباحاً|صباحا|صباح|مساءً|مساءا|مساء|ص|م)\b/
+  );
+  const loose = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\b/);
+  const bare = normalized.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+  const match =
+    explicit ??
+    meridiemLoose ??
+    bare ??
+    (/(اجتماع|مكالمة|ميعاد|موعد)/.test(normalized) ? loose : null);
+
+  if (match) {
+    const rawHour = Number(match[1]);
+    const minute = match[2] ? Number(match[2]) : 0;
+    const meridiem = match[3] ?? "";
+    const hour = normalizeHour(rawHour, `${normalized} ${meridiem}`);
+
+    return {
+      hour,
+      minute,
+      label: `الساعة ${rawHour}${minute ? `:${`${minute}`.padStart(2, "0")}` : ""}`,
+    };
+  }
+
+  if (/(الصبح|صباحاً|صباحا|بداية\s+اليوم)/.test(normalized)) {
     return { hour: 9, minute: 0, label: "الصبح" };
   }
 
-  const explicit = normalized.match(
-    /(?:الساعة|الساعه|ساعة|س)\s*(\d{1,2})(?::(\d{2}))?/
-  );
-  const loose = normalized.match(/\b(\d{1,2})(?::(\d{2}))?\b/);
-  const match = explicit ?? (/(اجتماع|مكالمة|ميعاد|موعد)/.test(normalized) ? loose : null);
+  if (/(الظهر|بعد\s+الظهر)/.test(normalized)) {
+    return { hour: 13, minute: 0, label: "بعد الظهر" };
+  }
 
-  if (!match) return null;
+  if (/(العصر|آخر\s+النهار|اخر\s+النهار)/.test(normalized)) {
+    return { hour: 16, minute: 0, label: "العصر" };
+  }
 
-  const rawHour = Number(match[1]);
-  const minute = match[2] ? Number(match[2]) : 0;
-  const hour = normalizeHour(rawHour, normalized);
+  if (/(المغرب|بداية\s+المساء)/.test(normalized)) {
+    return { hour: 18, minute: 0, label: "المغرب" };
+  }
 
-  return {
-    hour,
-    minute,
-    label: `الساعة ${rawHour}${minute ? `:${`${minute}`.padStart(2, "0")}` : ""}`,
-  };
+  if (/(بالليل|الليل|آخر\s+اليوم|اخر\s+اليوم|المساء)/.test(normalized)) {
+    return { hour: 19, minute: 30, label: "المساء" };
+  }
+
+  return null;
 }
 
 function normalizeHour(hour: number, segment: string) {
   if (/(صباح|صباحاً|صباحا|ص\b)/.test(segment)) return hour;
-  if (/(مساء|مساءً|مساءا|م\b)/.test(segment) && hour < 12) return hour + 12;
+  if (/(مساء|مساءً|مساءا|ليل|العصر|المغرب|م\b)/.test(segment) && hour < 12) return hour + 12;
   if (hour >= 1 && hour <= 7) return hour + 12;
   return hour;
 }
 
 function parseDuration(segment: string) {
   const normalized = normalizeDigits(segment);
+  const range = parseTimeRange(normalized);
+  if (range) return Math.max(15, minutesBetween(range.start, range.end));
+
+  if (/(نص\s+ساعة|نصف\s+ساعة)/.test(normalized)) return 30;
+  if (/(ربع\s+ساعة)/.test(normalized)) return 15;
+  if (/(ساعتين|ساعتان)/.test(normalized)) return 120;
+  if (/(ساعة\s+ونص|ساعة\s+ونصف)/.test(normalized)) return 90;
+
   const duration = normalized.match(/(\d+)\s*(دقيقة|دقايق|ساعة|ساعات)/);
 
   if (duration) {
@@ -375,7 +555,7 @@ function inferPriority(segment: string): Priority {
 }
 
 function inferEnergy(segment: string): Energy {
-  if (/(عرض|تقرير|كتابة|برمجة|دراسة|مذاكرة)/.test(segment)) return "high";
+  if (/(عرض|تقرير|كتابة|برمجة|دراسة|مذاكرة|تحضير|تحليل)/.test(segment)) return "high";
   if (/(مكالمة|اتصال|مراجعة|راجع)/.test(segment)) return "low";
   return "medium";
 }
@@ -398,12 +578,20 @@ function cleanTitle(segment: string) {
     (title, expression) => title.replace(expression, ""),
     segment
   );
-  return withoutDate
-    .replace(/(?:الساعة|الساعه|ساعة|س)\s*[٠-٩۰-۹\d]{1,2}(?::[٠-٩۰-۹\d]{2})?/g, "")
-    .replace(/(بعد\s+الشغل|بعد\s+العمل|الصبح|صباحاً|صباحا)/g, "")
-    .replace(/^(عايز|أريد|اريد|لازم|عندي|عندى|أحتاج|احتاج|أخلص|اخلص|أروح|اروح)\s+/g, "")
+  const cleaned = withoutDate
+    .replace(/(?:من|مِن)\s*[٠-٩۰-۹\d]{1,2}(?::[٠-٩۰-۹\d]{2})?\s*(?:لـ?|إلى|الى|حتى|لحد)\s*[٠-٩۰-۹\d]{1,2}(?::[٠-٩۰-۹\d]{2})?/g, "")
+    .replace(/(?:الساعة|الساعه|ساعة|س)\s*[٠-٩۰-۹\d]{1,2}(?::[٠-٩۰-۹\d]{2})?\s*(صباحاً|صباحا|صباح|مساءً|مساءا|مساء|ص|م)?/g, "")
+    .replace(/\b[٠-٩۰-۹\d]{1,2}(?::[٠-٩۰-۹\d]{2})?\s*(صباحاً|صباحا|صباح|مساءً|مساءا|مساء|ص|م)\b/g, "")
+    .replace(/\d+\s*(دقيقة|دقايق|ساعة|ساعات)/g, "")
+    .replace(/(نص\s+ساعة|نصف\s+ساعة|ربع\s+ساعة|ساعتين|ساعتان|ساعة\s+ونص|ساعة\s+ونصف)/g, "")
+    .replace(/(بعد\s+الشغل|بعد\s+العمل|الصبح|صباحاً|صباحا|الظهر|بعد\s+الظهر|العصر|المغرب|بالليل|الليل|المساء)/g, "")
+    .replace(/^(أنا|انا|إحنا|احنا)\s+/g, "")
+    .replace(/^(عايز|عاوز|أريد|اريد|لازم|المفروض|محتاج|أحتاج|احتاج|عندي|عندى)\s+/g, "")
+    .replace(/^(أن|ان|إني|اني)\s+/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+  return rewriteTaskTitle(cleaned);
 }
 
 function createFixedPlanItem(event: ParsedFixedEvent): PlanItem {
@@ -480,6 +668,156 @@ function addDays(date: Date, days: number) {
   const out = new Date(date);
   out.setDate(out.getDate() + days);
   return out;
+}
+
+function schedulingWindowStart(date: Date, now: Date) {
+  if (!isSameDate(date, now)) return startOfDay(date);
+  return roundUpToQuarter(now);
+}
+
+function roundUpToQuarter(date: Date) {
+  const out = new Date(date);
+  const minutes = out.getMinutes();
+  const nextQuarter = Math.ceil(minutes / 15) * 15;
+  out.setMinutes(nextQuarter, 0, 0);
+  return out;
+}
+
+function shouldUseCalendarEventAsBusy(event: CalendarBusyEvent, date: Date) {
+  if (event.isAllDay) return false;
+  return toDateKey(new Date(event.start)) === toDateKey(date);
+}
+
+function parseTimeRange(segment: string): ParsedTimeRange | null {
+  const normalized = normalizeDigits(segment);
+  const match = normalized.match(
+    /(?:من|مِن)\s*(\d{1,2})(?::(\d{2}))?\s*(?:لـ?|إلى|الى|حتى|لحد)\s*(\d{1,2})(?::(\d{2}))?/
+  );
+
+  if (!match) return null;
+
+  const start = {
+    hour: normalizeHour(Number(match[1]), normalized),
+    minute: match[2] ? Number(match[2]) : 0,
+    label: formatClockLabel({
+      hour: normalizeHour(Number(match[1]), normalized),
+      minute: match[2] ? Number(match[2]) : 0,
+    }),
+  };
+  let endHour = normalizeHour(Number(match[3]), normalized);
+  const endMinute = match[4] ? Number(match[4]) : 0;
+
+  if (endHour * 60 + endMinute <= start.hour * 60 + start.minute) {
+    endHour += 12;
+  }
+
+  return {
+    start: { ...start, label: `الساعة ${start.label}` },
+    end: {
+      hour: endHour,
+      minute: endMinute,
+      label: `الساعة ${formatClockLabel({ hour: endHour, minute: endMinute })}`,
+    },
+  };
+}
+
+function minutesBetween(start: ParsedTimeExpression, end: ParsedTimeExpression) {
+  const startMinutes = start.hour * 60 + start.minute;
+  const endMinutes = end.hour * 60 + end.minute;
+  return endMinutes > startMinutes
+    ? endMinutes - startMinutes
+    : endMinutes + 24 * 60 - startMinutes;
+}
+
+function formatClockLabel(time: Pick<ParsedTimeExpression, "hour" | "minute">) {
+  const hour = time.hour > 12 ? time.hour - 12 : time.hour;
+  return `${hour}${time.minute ? `:${`${time.minute}`.padStart(2, "0")}` : ""}`;
+}
+
+function normalizeDuration(duration: number) {
+  if (!Number.isFinite(duration)) return 30;
+  return Math.max(15, Math.min(480, Math.round(duration)));
+}
+
+function resolveExtractionDate(
+  dateHint: string | null,
+  dateExpression: string | null,
+  now: Date
+) {
+  const hinted = parseDateHint(dateHint);
+  if (hinted) return hinted;
+  if (dateExpression) return resolveArabicDate(dateExpression, now).date;
+  return startOfDay(now);
+}
+
+function parseDateHint(value: string | null) {
+  if (!value) return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function renderTimeForOriginal(timeExpression: string | null) {
+  if (!timeExpression) return null;
+  return /(الساعة|الساعه|ساعة|س\s|صباح|مساء|من\s)/.test(timeExpression)
+    ? timeExpression
+    : `الساعة ${timeExpression}`;
+}
+
+function rewriteTaskTitle(title: string) {
+  const text = title
+    .replace(/^(أن|ان|إني|اني)\s+/g, "")
+    .replace(/(إن شاء الله|ان شاء الله|لو سمحت|من فضلك)$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text) return "مهمة جديدة";
+
+  const call = text.match(/^(?:أكلم|اكلم|كلم)\s+(.+)/);
+  if (call) return `مكالمة مع ${cleanTitleObject(call[1])}`;
+
+  const contact = text.match(/^(?:أتصل|اتصل)\s+ب?(.+)/);
+  if (contact) return `اتصال مع ${cleanTitleObject(contact[1])}`;
+
+  if (/^(?:أروح|اروح|اذهب|أذهب)\s+(?:لل?|إلى\s+)?(?:ال)?جيم/.test(text)) {
+    return "تمرين في الجيم";
+  }
+
+  const finish = text.match(/^(?:أخلص|اخلص|خلص|أنهي|انهي)\s+(.+)/);
+  if (finish) return `إنهاء ${cleanTitleObject(finish[1])}`;
+
+  const review = text.match(/^(?:أراجع|اراجع|راجع)\s+(.+)/);
+  if (review) return `مراجعة ${cleanTitleObject(review[1])}`;
+
+  const write = text.match(/^(?:أكتب|اكتب|كتب)\s+(.+)/);
+  if (write) return `كتابة ${cleanTitleObject(write[1])}`;
+
+  const prepare = text.match(/^(?:أحضر|احضر|حضّر|حضر)\s+(.+)/);
+  if (prepare) return `تحضير ${cleanTitleObject(prepare[1])}`;
+
+  const buy = text.match(/^(?:أشتري|اشتري|اشترى|شراء)\s+(.+)/);
+  if (buy) return `شراء ${cleanTitleObject(buy[1])}`;
+
+  const pay = text.match(/^(?:أدفع|ادفع|دفع)\s+(.+)/);
+  if (pay) return `دفع ${cleanTitleObject(pay[1])}`;
+
+  const study = text.match(/^(?:أذاكر|اذاكر|ذاكر|مذاكرة)\s+(.+)/);
+  if (study) return `مذاكرة ${cleanTitleObject(study[1])}`;
+
+  const read = text.match(/^(?:أقرأ|اقرأ|قراءة)\s+(.+)/);
+  if (read) return `قراءة ${cleanTitleObject(read[1])}`;
+
+  const arrange = text.match(/^(?:أرتب|ارتب|رتب)\s+(.+)/);
+  if (arrange) return `ترتيب ${cleanTitleObject(arrange[1])}`;
+
+  return text;
+}
+
+function cleanTitleObject(value: string) {
+  return value
+    .replace(/^(?:مع|لـ|ل|ب)\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function toDateKey(date: Date) {

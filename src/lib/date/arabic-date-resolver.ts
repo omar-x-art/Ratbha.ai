@@ -49,10 +49,10 @@ export function resolveArabicDate(input: string, now: Date = new Date()): Resolv
 
   const today = startOfDay(now);
 
-  if (/^(اليوم)$/.test(txt)) {
+  if (/^(اليوم|النهاردة|انهاردة)$/.test(txt)) {
     return { date: today, confidence: 1, reason: "today" };
   }
-  if (/^(بكرة|بكره|غداً|غدا)$/.test(txt)) {
+  if (/^(بكرة|بكره|بكرا|غداً|غدا)$/.test(txt)) {
     const d = new Date(today);
     d.setDate(today.getDate() + 1);
     return { date: d, confidence: 1, reason: "tomorrow" };

@@ -26,6 +26,7 @@ export const TaskExtractionSchema = z.object({
       z.object({
         title: z.string(),
         date_expression: z.string().nullable().optional(),
+        resolved_date_hint: z.string().nullable().optional(),
         time_expression: z.string().nullable().optional(),
         duration_minutes: z.number().int().positive().default(60),
         confidence: z.number().min(0).max(1).default(0.7),

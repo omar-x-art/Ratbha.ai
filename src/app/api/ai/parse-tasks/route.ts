@@ -1,8 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { extractTasksWithGemini } from "@/lib/gemini/client";
-import { buildPlanFromText } from "@/lib/plan/build-plan";
-import type { TaskExtraction } from "@/lib/gemini/schema";
+import { fetchCalendarEvents } from "@/lib/google/calendar";
+import {
+  GOOGLE_ACCOUNTS_COOKIE,
+  parseCalendarAccountsCookie,
+} from "@/lib/google/calendar-session";
+import { buildPlanFromExtraction, buildPlanFromText } from "@/lib/plan/build-plan";
+
+export const dynamic = "force-dynamic";
 
 const RequestSchema = z.object({
   text: z.string().min(1).max(4000),
@@ -10,7 +16,7 @@ const RequestSchema = z.object({
   locale: z.string().optional(),
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   let body: unknown;
   try {
     body = await req.json();
@@ -26,16 +32,22 @@ export async function POST(req: Request) {
   }
 
   const timezone = parsed.data.timezone ?? "Africa/Cairo";
-  const geminiExtraction = await extractTasksWithGemini({
-    text: parsed.data.text,
-    timezone,
-  });
-  const planningText = geminiExtraction
-    ? renderExtractionAsText(geminiExtraction)
-    : parsed.data.text;
-  const result = buildPlanFromText(planningText, {
-    timezone: parsed.data.timezone,
-  });
+  const [geminiExtraction, calendarEvents] = await Promise.all([
+    extractTasksWithGemini({
+      text: parsed.data.text,
+      timezone,
+    }),
+    loadCalendarEvents(req),
+  ]);
+  const result = geminiExtraction
+    ? buildPlanFromExtraction(parsed.data.text, geminiExtraction, {
+        timezone,
+        calendarEvents,
+      })
+    : buildPlanFromText(parsed.data.text, {
+        timezone,
+        calendarEvents,
+      });
 
   return NextResponse.json({
     ...(geminiExtraction ?? result.extraction),
@@ -47,29 +59,17 @@ export async function POST(req: Request) {
   });
 }
 
-function renderExtractionAsText(extraction: TaskExtraction) {
-  const fixedEvents = extraction.fixed_events_mentioned.map((event) =>
-    [
-      "عندي",
-      event.title,
-      event.date_expression,
-      event.time_expression,
-      `${event.duration_minutes} دقيقة`,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-  const tasks = extraction.tasks.map((task) =>
-    [
-      task.title,
-      task.date_expression,
-      task.time_expression,
-      `${task.duration_minutes} دقيقة`,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-  const ambiguities = extraction.ambiguities.map((item) => item.text);
-
-  return [...fixedEvents, ...tasks, ...ambiguities].join("، ");
+async function loadCalendarEvents(req: NextRequest) {
+  try {
+    const accounts = parseCalendarAccountsCookie(
+      req.cookies.get(GOOGLE_ACCOUNTS_COOKIE)?.value
+    );
+    const timeMin = new Date();
+    const timeMax = new Date(timeMin);
+    timeMax.setDate(timeMin.getDate() + 14);
+    const result = await fetchCalendarEvents({ timeMin, timeMax, accounts });
+    return result.events;
+  } catch {
+    return [];
+  }
 }

@@ -59,12 +59,24 @@ export async function extractTasksWithGemini({
 }
 
 function buildPrompt(text: string, timezone: string) {
+  const today = new Date().toISOString().slice(0, 10);
+
   return [
-    "استخرج المهام من النص العربي التالي بصيغة JSON فقط.",
-    "لا تضف markdown ولا شرح.",
+    "أنت سراج، مساعد تخطيط يومي عربي. حوّل الكلام الحر إلى مهام فعلية منظمة بصيغة JSON فقط.",
+    "لا تنسخ جمل المستخدم كما هي. اكتب عنواناً قصيراً ومهنياً لكل مهمة بصيغة اسمية مثل: مراجعة التقرير، اتصال مع أحمد، تمرين في الجيم.",
+    "احذف الحشو مثل: أنا عندي، النهاردة، عايز، لازم، ممكن، إن شاء الله، واستخدمها فقط لفهم التاريخ أو النية.",
+    "لو قال المستخدم اليوم أو النهاردة فاجعل date_expression اليوم. لو قال بكرة أو بكره أو بكرا فاجعلها بكرة. لو قال بعد بكرة فاجعلها بعد بكرة.",
+    "لو ذكر وقتاً صريحاً فاكتبه في time_expression واجعل flexibility fixed. لو لم يذكر وقتاً فاترك time_expression null واجعل flexibility flexible أو deadline حسب الكلام.",
+    "لو ذكر مدة فاكتبها بالدقائق. إن لم يذكر مدة فاختر مدة معقولة حسب نوع المهمة.",
+    "استخدم resolved_date_hint بصيغة YYYY-MM-DD عندما تستطيع حساب التاريخ من اليوم.",
+    "ضع الاجتماعات أو المواعيد الموجودة فعلاً في fixed_events_mentioned، أما الأشياء المطلوب إنجازها فضعها في tasks.",
+    "لو الكلام مبهم ولا يمكن تحويله لمهمة، ضعه في ambiguities مع سؤال عربي قصير.",
+    "لا تضف markdown ولا شرح ولا أي نص خارج JSON.",
     `المنطقة الزمنية: ${timezone}`,
+    `تاريخ اليوم: ${today}`,
     "الشكل المطلوب: { language, timezone, tasks, fixed_events_mentioned, ambiguities }",
-    "كل مهمة تحتوي: title, date_expression, time_expression, duration_minutes, priority, energy, flexibility, confidence.",
+    "كل مهمة تحتوي: title, date_expression, resolved_date_hint, time_expression, duration_minutes, priority, energy, flexibility, confidence.",
+    "كل موعد ثابت يحتوي: title, date_expression, resolved_date_hint, time_expression, duration_minutes, confidence.",
     "القيم المسموحة: priority low/medium/high/urgent، energy low/medium/high، flexibility fixed/flexible/deadline.",
     `النص: ${text}`,
   ].join("\n");

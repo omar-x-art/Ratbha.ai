@@ -17,6 +17,16 @@ describe("resolveArabicDate", () => {
     expect(r.date?.toDateString()).toBe(expected.toDateString());
   });
 
+  it("resolves Egyptian today and tomorrow aliases", () => {
+    const today = resolveArabicDate("النهاردة", NOW);
+    const tomorrow = resolveArabicDate("بكرا", NOW);
+
+    expect(today.date?.toDateString()).toBe(NOW.toDateString());
+    expect(tomorrow.date?.toDateString()).toBe(
+      new Date(2026, 4, 5).toDateString()
+    );
+  });
+
   it("resolves الخميس as the next Thursday", () => {
     const r = resolveArabicDate("الخميس", NOW);
     expect(r.confidence).toBeGreaterThan(0.5);
